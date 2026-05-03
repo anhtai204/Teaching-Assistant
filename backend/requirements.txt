@@ -14,7 +14,7 @@ supabase>=2.10.0
 python-dotenv>=1.0.0
 
 # AI & RAG
-langgraph==1.1.10
+langgraph>=0.2.0,<0.3.0
 langchain==0.2.14
 langchain-community==0.2.12
 langchain-core==0.2.33
