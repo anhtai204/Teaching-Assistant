@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-export PYTHONPATH=/opt/render/project/src/backend
+# Thêm /src vào cuối đường dẫn PYTHONPATH để Python coi src là thư mục gốc
+export PYTHONPATH=/opt/render/project/src/backend/src
 
 echo "--- Starting Application Initialization ---"
 echo "PORT: ${PORT:-10000}"
