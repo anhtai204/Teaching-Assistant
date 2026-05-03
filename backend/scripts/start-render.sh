@@ -3,31 +3,30 @@ set -e
 
 echo "--- Starting Application Initialization ---"
 echo "📍 Working directory: $(pwd)"
+echo "📂 Contents of current directory:"
+ls -F
 
-# 1. Đảm bảo PYTHONPATH bao gồm thư mục hiện tại (backend)
-# Điều này giúp gunicorn tìm thấy package 'src'
-export PYTHONPATH=$PYTHONPATH:$(pwd)
+# Set PYTHONPATH - Python tự động đọc biến env này vào sys.path
+# Đây là cách chuẩn, không dùng --pythonpath của gunicorn (dễ gây lỗi)
+export PYTHONPATH="$(pwd):${PYTHONPATH}"
+echo "🐍 PYTHONPATH: $PYTHONPATH"
 
-# 2. Xóa các symlink rác nếu có (do script cũ tạo ra lỗi src/src)
+# Xóa các symlink rác nếu có
 if [ -L "src/src" ]; then
     echo "🧹 Cleaning up redundant symlink src/src..."
     rm src/src
 fi
 
-# 3. Thông tin debug để kiểm tra cấu trúc
-echo "📂 Contents of current directory:"
-ls -F
+# ⚡ KIỂM TRA IMPORT TRƯỚC KHI CHẠY GUNICORN
+# Lệnh này sẽ hiển thị lỗi Python chi tiết nếu có vấn đề với code/dependencies
+echo "--- Pre-flight: Testing Python import ---"
+python -c "from src.app.main import app; print('✅ Import OK - app found')"
 
 echo "--- Launching Gunicorn Server ---"
-
-# Chạy với 1 worker để tiết kiệm RAM trên gói Free của Render
-# --pythonpath $(pwd): Đây là cách ĐÚNG để gunicorn nhận diện package 'src'
-# (bash export PYTHONPATH không truyền được vào Python runtime của gunicorn)
 exec gunicorn \
   -w 1 \
   -k uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:${PORT:-10000} \
   --timeout 120 \
-  --log-level info \
-  --pythonpath $(pwd) \
+  --log-level debug \
   src.app.main:app
