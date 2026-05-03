@@ -20,7 +20,10 @@ fi
 # ⚡ KIỂM TRA IMPORT TRƯỚC KHI CHẠY GUNICORN
 # Lệnh này sẽ hiển thị lỗi Python chi tiết nếu có vấn đề với code/dependencies
 echo "--- Pre-flight: Testing Python import ---"
-python -c "from src.app.main import app; print('✅ Import OK - app found')"
+python -c "from src.app.main import app; print('✅ Import OK - app found')" 2>&1 || {
+    echo "❌ Import FAILED. See traceback above."
+    exit 1
+}
 
 echo "--- Launching Gunicorn Server ---"
 exec gunicorn \
