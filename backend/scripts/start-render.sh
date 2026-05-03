@@ -21,12 +21,13 @@ ls -F
 echo "--- Launching Gunicorn Server ---"
 
 # Chạy với 1 worker để tiết kiệm RAM trên gói Free của Render
-# Module: src.app.main (tương ứng với backend/src/app/main.py)
-# Variable: app
+# --pythonpath $(pwd): Đây là cách ĐÚNG để gunicorn nhận diện package 'src'
+# (bash export PYTHONPATH không truyền được vào Python runtime của gunicorn)
 exec gunicorn \
   -w 1 \
   -k uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:${PORT:-10000} \
   --timeout 120 \
-  --log-level debug \
+  --log-level info \
+  --pythonpath $(pwd) \
   src.app.main:app
