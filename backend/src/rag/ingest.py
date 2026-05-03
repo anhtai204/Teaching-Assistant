@@ -11,7 +11,8 @@ if winget_path not in os.environ.get("PATH", ""):
 
 from markitdown import MarkItDown
 from langchain_core.documents import Document as LCDocument
-import whisper
+from faster_whisper import WhisperModel
+import os
 
 md = MarkItDown()
 _whisper_model = None
@@ -19,57 +20,53 @@ _whisper_model = None
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
-        print("Loading Whisper model (small) for better Vietnamese support...")
-        # 'small' is significantly better for Vietnamese than 'base'
-        _whisper_model = whisper.load_model("small")
+        print("Loading Faster-Whisper model (small) with INT8 quantization for efficiency...")
+        # 'small' is great for Vietnamese. int8 makes it very light on RAM.
+        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
     return _whisper_model
 
 def transcribe_with_whisper(file_path):
-    model = get_whisper_model()
-    print(f"Transcribing {file_path} with Whisper (Music/Speech Optimized)...")
-    
-    # Cấu hình chuyên sâu để xử lý tốt hơn cả giọng hát và lời nói:
-    # - condition_on_previous_text=False: Giúp tránh bị lặp từ khi gặp đoạn nhạc dạo.
-    # - compression_ratio_threshold: Lọc bỏ các đoạn bị lặp lại vô nghĩa.
-    result = model.transcribe(
-        file_path, 
-        language=None, # Tự động nhận diện ngôn ngữ (Tiếng Anh, Tiếng Việt, ...)
-        fp16=False,
-        temperature=0.0,
-        initial_prompt="This is a professional lecture in English or Vietnamese. Accurate transcription only. / Đây là bài giảng chuyên môn tiếng Anh hoặc tiếng Việt.",
-        condition_on_previous_text=False,
-        compression_ratio_threshold=2.4,
-        no_speech_threshold=0.8,
-        logprob_threshold=-1.0
-    )
-    
-    # Danh sách các câu thường bị "ảo giác" (hallucination) - Song ngữ
-    hallucination_blacklist = [
-        "Hãy subscribe cho kênh",
-        "Ghiền Mì Gõ",
-        "không bỏ lỡ những video hấp dẫn",
-        "Cảm ơn các bạn đã xem video",
-        "Like và subscribe",
-        "Nhớ nhấn chuông thông báo",
-        "Thanks for watching",
-        "Please subscribe",
-        "Subscribe to my channel",
-        "Subtitles by",
-        "Amara.org"
-    ]
-
-    segments = []
-    for s in result.get("segments", []):
-        text = s["text"].strip()
-        # Loại bỏ các segment quá ngắn hoặc chứa từ khóa ảo giác
-        if len(text) < 2:
-            continue
+    try:
+        model = get_whisper_model()
+        print(f"--- Starting Faster-Whisper Transcription for: {os.path.basename(file_path)} ---")
         
-        is_hallucination = any(phrase.lower() in text.lower() for phrase in hallucination_blacklist)
-        if not is_hallucination:
-            segments.append(text)
+        # faster-whisper returns a generator of segments
+        segments, info = model.transcribe(
+            file_path,
+            beam_size=5,
+            language=None, # Auto-detect
+            initial_prompt="This is a professional lecture in English or Vietnamese. Accurate transcription only.",
+            vad_filter=True, # Voice Activity Detection to filter out silence/noise
+            vad_parameters=dict(min_silence_duration_ms=500)
+        )
+        
+        full_text = []
+        for segment in segments:
+            full_text.append(segment.text)
             
-    return "\n".join(segments)
+        print(f"✅ Transcription completed. Extracted {sum(len(t) for t in full_text)} characters.")
+        
+        # Extract and filter segments
+        hallucination_blacklist = [
+            "Hãy subscribe cho kênh", "Ghiền Mì Gõ", "không bỏ lỡ những video hấp dẫn",
+            "Cảm ơn các bạn đã xem video", "Like và subscribe", "Nhớ nhấn chuông thông báo",
+            "Thanks for watching", "Please subscribe", "Subscribe to my channel",
+            "Subtitles by", "Amara.org"
+        ]
+
+        filtered_segments = []
+        for text in full_text:
+            text = text.strip()
+            if len(text) < 2: continue
+            
+            is_hallucination = any(phrase.lower() in text.lower() for phrase in hallucination_blacklist)
+            if not is_hallucination:
+                filtered_segments.append(text)
+                
+        return "\n".join(filtered_segments)
+    except Exception as e:
+        print(f"❌ Faster-Whisper Transcription Error: {e}")
+        raise e
 
 def load_documents():
     docs = []
@@ -142,6 +139,8 @@ def ingest_file(file_path: str, document_id: str, course_id: str, db: Session):
     file_name = os.path.basename(file_path)
     try:
         ext = file_name.split('.')[-1].lower()
+        print(f"Processing file: {file_name} (Type: {ext})")
+        
         if ext in ['mp3', 'mp4', 'wav', 'm4a', 'flac']:
             print(f'Transcribing {file_name} with Whisper...')
             content = transcribe_with_whisper(file_path)
@@ -150,6 +149,12 @@ def ingest_file(file_path: str, document_id: str, course_id: str, db: Session):
             result = md.convert(file_path)
             content = result.text_content
         
+        if not content or len(content.strip()) == 0:
+            print(f"⚠️ Warning: No content extracted from {file_name}")
+            return 0
+            
+        print(f"Extracted {len(content)} characters.")
+
         doc = LCDocument(
             page_content=content,
             metadata={
@@ -163,35 +168,40 @@ def ingest_file(file_path: str, document_id: str, course_id: str, db: Session):
         )
         
         chunks = chunk_documents([doc])
-        
-        # 1. Save to Vector Store (ChromaDB)
-        vectorstore = get_vectorstore()
-        add_documents(vectorstore, chunks)
-        
-        # 2. Save to PostgreSQL (document_chunks table)
+        if not chunks:
+            print(f"⚠️ Warning: No chunks created for {file_name}")
+            return 0
+            
+        # 1. Save to PostgreSQL (document_chunks table) with pgvector
         embedding_model = get_embedding()
         
         print(f"Saving {len(chunks)} chunks to PostgreSQL...")
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             # Generate embedding
-            if hasattr(embedding_model, "embed_query"):
-                emb = embedding_model.embed_query(chunk.page_content)
-            else:
-                emb = embedding_model.encode(chunk.page_content).tolist()
-            
-            db_chunk = DocumentChunk(
-                document_id=document_id,
-                content=chunk.page_content,
-                embedding=emb,
-                metadata_json=chunk.metadata
-            )
-            db.add(db_chunk)
+            try:
+                if hasattr(embedding_model, "embed_query"):
+                    emb = embedding_model.embed_query(chunk.page_content)
+                else:
+                    emb = embedding_model.encode(chunk.page_content).tolist()
+                
+                db_chunk = DocumentChunk(
+                    document_id=document_id,
+                    content=chunk.page_content,
+                    embedding=emb,
+                    metadata_json=chunk.metadata
+                )
+                db.add(db_chunk)
+                if (i + 1) % 10 == 0:
+                    print(f"  Processed {i + 1}/{len(chunks)} chunks...")
+            except Exception as emb_err:
+                print(f"❌ Error creating embedding for chunk {i}: {emb_err}")
+                raise emb_err
         
         db.commit()
-        print(f'Successfully ingested {file_name} to ChromaDB and PostgreSQL')
+        print(f'✅ Successfully ingested {file_name} to Supabase pgvector ({len(chunks)} chunks)')
         return len(chunks)
     except Exception as e:
         db.rollback()
-        print(f'Error ingesting {file_name}: {e}')
+        print(f'❌ Error ingesting {file_name}: {e}')
         raise e
 
