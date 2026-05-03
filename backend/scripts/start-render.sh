@@ -1,18 +1,24 @@
-#!/usr/bin/env bash
-set -e  # Exit on error
+#!/bin/bash
+set -euo pipefail  # Strict + unset var fail
 
 echo "--- Starting Application Initialization ---"
+echo "PORT: ${PORT:-10000}"
+echo "Working dir: $(pwd)"
+ls -la src/  # Debug structure
+pip list | grep -E "(gunicorn|uvicorn)"  # Check deps
+
+# Database migrations nếu cần
+# python -m src.app.migrate  # Uncomment nếu có
+
 echo "--- Launching Gunicorn Server ---"
-
-# Debug: List files/modules
-ls -la *.py
-pip list | grep gunicorn
-
-# Chạy với debug
-exec gunicorn main:app \
-  --bind 0.0.0.0:${PORT:-10000} \
-  --workers 1 \
-  --worker-class uvicorn.workers.UvicornWorker \
+exec gunicorn \
+  -w 1 \  # Giảm workers cho Free plan
+  -k uvicorn.workers.UvicornWorker \
+  --bind "0.0.0.0:${PORT:-10000}" \
+  --worker-tmp-dir /dev/shm \
+  --preload \
   --timeout 120 \
+  --max-requests 1000 \
+  --max-requests-jitter 100 \
   --log-level info \
-  --preload
+  src.app.main:app  # Giữ nguyên path
