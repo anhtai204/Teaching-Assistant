@@ -1,0 +1,186 @@
+Yêu cầu của bạn
+│
+▼
+Hệ thống phân tích (Silent Analysis)
+│
+▼
+Phát hiện lĩnh vực (Frontend? Backend? Security?...)
+│
+▼
+Chọn Agent chuyên gia tương ứng
+│
+▼
+Thông báo cho bạn Agent đang được dùng:
+🤖 Đang áp dụng kiến thức của @[agent-name]...
+│
+▼
+Trả lời ở cấp độ chuyên gi
+
+Ví dụ thực tế
+Yêu cầu của bạn	Agent được kích hoạt
+"Thêm xác thực JWT vào API"			@security-auditor + @backend-specialist
+"Sửa lỗi nút dark mode bị lệch màu"		@frontend-specialist
+"Login trả về lỗi 500 ngẫu nhiên"		@debugger
+"Thiết kế schema cho bảng users và orders"	@database-architect
+"Viết unit test cho service xác thực"		@test-engineer
+"Tối ưu tốc độ tải trang"			@performance-optimizer
+"Lập kế hoạch tính năng thanh toán"		@project-planner
+
+
+**Agents
+-- Nhóm Quản lý & Điều phối
+Agent			Chuyên môn							Skills sử dụng
+orchestrator		Điều phối nhiều Agent làm việc song song cho tác vụ phức tạp	parallel-agents, behavioral-modes
+project-planner		Khám phá yêu cầu, lập kế hoạch và phân rã công việc		brainstorming, plan-writing, architecture
+product-manager		Yêu cầu nghiệp vụ, user stories					plan-writing, brainstorming
+product-owner		Chiến lược sản phẩm, quản lý backlog, định nghĩa MVP		plan-writing, brainstorming
+
+-- Nhóm Phát triển
+Agent			Chuyên môn					Skills sử dụng
+frontend-specialist	Giao diện Web (React, Next.js, Tailwind CSS)	react-best-practices, frontend-design, tailwind-patterns, web-design-guidelines
+backend-specialist	API, Business Logic, máy chủ			api-patterns, nodejs-best-practices, database-design
+database-architect	Thiết kế schema, SQL, tối ưu truy vấn		database-design, prisma-expert
+mobile-developer	iOS, Android, React Native, Flutter		mobile-design
+game-developer		Logic game, cơ học trò chơi			game-development
+devops-engineer		CI/CD, Docker, hạ tầng cloud			deployment-procedures, docker-expert
+
+
+-- Nhóm Chất lượng & Bảo mật
+Agent			Chuyên môn					Skills sử dụng
+security-auditor	Kiểm tra bảo mật, tuân thủ OWASP		vulnerability-scanner, red-team-tactics
+penetration-tester	Bảo mật tấn công (Offensive Security)		red-team-tactics
+test-engineer		Chiến lược kiểm thử toàn diện			testing-patterns, tdd-workflow, webapp-testing
+qa-automation-engineer	Kiểm thử E2E và CI Pipeline			webapp-testing, testing-patterns
+debugger		Phân tích nguyên nhân gốc rễ của lỗi		systematic-debugging
+performance-optimizer	Tối ưu hiệu năng và Core Web Vitals		performance-profiling
+
+-- Nhóm Chuyên biệt
+Agent			Chuyên môn						Skills sử dụng
+seo-specialist		Xếp hạng tìm kiếm, khả năng hiển thị (SEO + GEO)	seo-fundamentals, geo-fundamentals
+documentation-writer	Hướng dẫn sử dụng, tài liệu kỹ thuật			documentation-templates
+code-archaeologist	Phân tích và tái cấu trúc code cũ (Legacy code)		clean-code, code-review-checklist
+explorer-agent		Khám phá và phân tích codebase hiện có			(không có skill cố định, dùng ngữ cảnh)
+
+
+
+Tình huống					Agent phù hợp
+Bắt đầu dự án mới, chưa biết thiết kế thế nào	project-planner → sau đó orchestrator
+Xây dựng trang web, component UI		frontend-specialist
+Tạo API endpoint, kết nối database		backend-specialist
+Thiết kế bảng DB, model dữ liệu			database-architect
+Phát hiện lỗ hổng bảo mật			security-auditor
+Ứng dụng bị lỗi không rõ nguyên nhân		debugger
+Muốn viết test cho code hiện có			test-engineer
+Trang web tải chậm, điểm Lighthouse thấp	performance-optimizer
+Cần lên kế hoạch triển khai sản phẩm		project-planner + devops-engineer
+Cần phân tích một codebase lạ			explorer-agent
+
+
+
+** Skills
+🎨 Frontend & UI (5 Skills)
+Skill				Mô tả
+react-best-practices		Tối ưu React & Next.js — 57 quy tắc từ Vercel Engineering
+web-design-guidelines		Kiểm toán UI web — 100+ quy tắc về Accessibility, UX, Performance
+tailwind-patterns		Tailwind CSS v4, CSS-first config, container queries
+frontend-design			Hệ thống thiết kế, bảng màu, typography, micro-animations
+ui-ux-pro-max			50 phong cách thiết kế, 21 bảng màu, 50 font chữ chuyên nghiệp
+
+⚙️ Backend & API (4 Skills)
+Skill				Mô tả
+api-patterns			Thiết kế API: REST vs GraphQL vs tRPC, versioning, pagination
+nestjs-expert			NestJS modules, DI container, decorators, Guards
+nodejs-best-practices		Node.js async patterns, bảo mật, kiến trúc module
+python-patterns			FastAPI, Django, async vs sync, type hints, Pydantic v2
+
+🗄️ Database (2 Skills)
+Skill				Mô tả
+database-design			Thiết kế schema, chiến lược indexing, tránh N+1 query
+prisma-expert			Prisma ORM, migrations, relations, query optimization
+
+📝 TypeScript / JavaScript (1 Skill)
+Skill				Mô tả
+typescript-expert		Lập trình kiểu nâng cao (generics, conditional types), hiệu năng biên dịch
+
+☁️ Cloud & Infrastructure (3 Skills)
+Skill				Mô tả
+docker-expert			Containerization, Docker Compose, multi-stage builds
+deployment-procedures		CI/CD, chiến lược deploy 5 giai đoạn, rollback
+server-management		Quản lý process, monitoring, scaling
+
+🧪 Testing & Quality (5 Skills)
+Skill				Mô tả
+testing-patterns		Pyramid kiểm thử, Jest/Vitest, AAA pattern, mocking
+webapp-testing			E2E testing, Playwright, audit chiến lược sâu
+tdd-workflow			Vòng lặp RED-GREEN-REFACTOR, test-first development
+code-review-checklist		Tiêu chuẩn review code: chất lượng, bảo mật, best practice
+lint-and-validate		ESLint, Prettier, TypeScript strict mode
+
+🔒 Security (2 Skills)
+Skill				Mô tả
+vulnerability-scanner		OWASP 2025, Supply Chain Security, phân tích lỗ hổng
+red-team-tactics		Chiến thuật tấn công theo MITRE ATT&CK, báo cáo penetration test
+
+🏗️ Architecture & Planning (4 Skills)
+Skill				Mô tả
+app-builder		Tạo khung ứng dụng full-stack, chọn tech stack, phối hợp Agent
+architecture		ADR (Architecture Decision Records), đánh đổi trade-off
+plan-writing		Phân rã công việc, định nghĩa phụ thuộc, tiêu chí xác minh
+brainstorming		Giao thức Socratic: đặt câu hỏi làm rõ trước khi triển khai
+
+📱 Mobile (1 Skill)
+Skill				Mô tả
+mobile-design			Touch interaction, Mobile-first, iOS/Android conventions
+
+🎮 Game Development (1 Skill)
+Skill				Mô tả
+game-development		Logic game, cơ học vật lý, vòng lặp game loop
+
+🔍 SEO & Growth (2 Skills)
+Skill				Mô tả
+seo-fundamentals		E-E-A-T, Core Web Vitals, Google algorithm principles
+geo-fundamentals		Generative Engine Optimization (tối ưu cho AI search: ChatGPT, Perplexity)
+
+💻 Shell / CLI (2 Skills)
+Skill				Mô tả
+bash-linux			Linux commands, piping, error handling, scripting
+powershell-windows		PowerShell operators, quản lý lỗi, pitfalls
+
+🔧 Other (6 Skills)
+https://docs.lifetex.vn/link/383#bkmrk-skill-m%C3%B4-t%E1%BA%A3-clean-co
+
+Skill				Mô tả
+clean-code			Tiêu chuẩn code sạch toàn cục, không over-engineering
+behavioral-modes		Các chế độ hoạt động AI (brainstorm, implement, debug, ship...)
+parallel-agents			Mẫu điều phối đa Agent, phân chia công việc độc lập
+mcp-builder			Xây dựng MCP Server, thiết kế tool & resource patterns
+documentation-templates		Cấu trúc README, API docs, comment code
+i18n-localization		Phát hiện hardcoded string, quản lý translations, RTL
+performance-profiling		Core Web Vitals, đo lường, bundle analysis
+systematic-debugging		Quy trình 4 giai đoạn: Discovery → Hypothesis → Verification → Resolution
+rust-pro			Rust 1.75+, async/await, Tokio, axum, systems programming
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

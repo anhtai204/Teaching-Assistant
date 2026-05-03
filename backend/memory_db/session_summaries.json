@@ -1,0 +1,6 @@
+{
+  "2cc3d1d4-8d0a-431c-8fed-275fe72e673b": {
+    "summary": "- User is learning about AI.\n- User strongly prefers definitions and explanations based on academic textbooks/standard curricula/course materials.\n- User repeatedly requests a concise, authoritative definition of AI.\n- Assistant successfully provides definitions referencing \"Artificial Intelligence: A Modern Approach\" (Russell & Norvig) when asked for \"textbooks\" (\"giáo trình\").\n- **Critical, recurring failure:** Assistant *consistently fails* to provide a definition when asked for \"course materials\" or \"tài liệu khóa học\", stating it cannot find the information. This failure was repeated multiple times in the recent interaction.",
+    "updated_at": "2026-05-02T16:29:11.957596+00:00"
+  }
+}

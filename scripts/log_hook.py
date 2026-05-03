@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""
+Shared AI hook logger — works with Claude Code, Gemini CLI, Codex, Cursor, Copilot.
+Reads JSON from stdin (sent by AI tool), normalizes to common format,
+appends to .ai-log/session.jsonl.
+
+You don't call this directly — it's called by tool configs (.claude/, .cursor/, etc.)
+"""
+import json
+import os
+import sys
+import subprocess
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def git(cmd):
+    try:
+        return subprocess.check_output(cmd.split(), shell=False, text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return ""
+
+
+def detect_tool(data: dict) -> str:
+    """Detect which AI tool sent this hook event."""
+    tool_env = os.environ.get("AI_TOOL_NAME", "").lower()
+    if tool_env:
+        return tool_env
+    # Heuristics
+    if "transcript_path" in data:
+        return "codex"
+    if data.get("hook_event_name", "").startswith(("Before", "After", "Session", "Pre", "Notification")):
+        return "gemini"
+    if data.get("hook_event_name", "")[0:1].islower():
+        # camelCase event names → Cursor or Copilot
+        if "workspace_roots" in data:
+            return "cursor"
+        if "toolName" in data:
+            return "copilot"
+    if "hook_event_name" in data:
+        return "claude"
+    # Default to antigravity if no other tool detected and prompt is present
+    if data.get("prompt") or data.get("content"):
+        return "antigravity"
+    return "unknown"
+
+
+def normalize(data: dict, tool: str) -> dict | None:
+    """Normalize tool-specific payload to common log entry."""
+    event = data.get("hook_event_name") or data.get("event", "")
+    ts = datetime.now(VN_TZ).isoformat()
+
+    student = git("git config user.email")
+    if not student:
+        student = os.environ.get("USERNAME", os.environ.get("USER", "unknown"))
+
+    base = {
+        "ts": ts,
+        "tool": tool,
+        "event": event or data.get("hook_event_name") or "UserPromptSubmit",
+        "session_id": (
+            data.get("session_id") or
+            data.get("conversation_id") or
+            data.get("generation_id") or
+            os.environ.get("AI_SESSION_ID", "local-session")
+        ),
+        "model": data.get("model") or os.environ.get("AI_MODEL", "unknown-model"),
+        "repo": git("git remote get-url origin").split("/")[-1].replace(".git", "") or "unknown-repo",
+        "branch": git("git rev-parse --abbrev-ref HEAD") or "main",
+        "commit": git("git rev-parse --short HEAD") or "0000000",
+        "student": git("git config user.email") or "unknown@student.com",
+    }
+
+    if tool == "claude":
+        prompt = ""
+        if event == "UserPromptSubmit":
+            prompt = data.get("prompt", "")[:1000]
+        elif isinstance(data.get("tool_input"), dict):
+            prompt = data["tool_input"].get("prompt") or data["tool_input"].get("content") or ""
+        base.update({
+            "prompt": prompt,
+            "tool_name": data.get("tool_name", ""),
+            "tool_input": data.get("tool_input") if event != "UserPromptSubmit" else None,
+            "tool_response": str(data.get("tool_response", ""))[:500],
+        })
+
+    elif tool == "gemini":
+        if event == "BeforeAgent":
+            prompt = data.get("prompt", "")[:1000]
+            base.update({"prompt": prompt})
+        else:
+            req = data.get("request", {})
+            contents = req.get("contents", [])
+            prompt = ""
+            for c in reversed(contents):
+                for part in c.get("parts", []):
+                    if part.get("text"):
+                        prompt = part["text"][:1000]
+                        break
+                if prompt:
+                    break
+            resp = data.get("response", {})
+            answer = ""
+            try:
+                answer = resp["candidates"][0]["content"]["parts"][0]["text"][:500]
+            except Exception:
+                pass
+            base.update({"prompt": prompt, "response_summary": answer})
+
+    elif tool == "codex":
+        base.update({
+            "prompt": data.get("prompt", "")[:1000],
+            "turn_id": data.get("turn_id", ""),
+            "transcript_path": data.get("transcript_path", ""),
+        })
+
+    elif tool == "cursor":
+        base.update({
+            "prompt": data.get("prompt", "")[:1000],
+            "files_context": data.get("attachments", []),
+        })
+
+    elif tool == "copilot":
+        base.update({
+            "prompt": data.get("prompt", "")[:1000],
+            "tool_name": data.get("toolName", ""),
+            "tool_args": data.get("toolArgs"),
+        })
+
+    elif tool == "antigravity":
+        base.update({
+            "prompt": data.get("prompt", "")[:1000],
+            "turn_id": data.get("turn_id", ""),
+            "response_summary": data.get("response_summary", ""),
+        })
+
+    # Generic fallback: if prompt is still empty, try to get it from the root
+    if not base.get("prompt"):
+        base["prompt"] = (data.get("prompt") or data.get("content") or "")[:1000]
+    
+    # Generic fallback: response_summary
+    if not base.get("response_summary"):
+        base["response_summary"] = (data.get("response_summary") or data.get("response") or "")[:500]
+
+    # Skip empty/noise events
+    if not base.get("prompt") and event not in ("Stop", "stop", "SessionEnd", "sessionEnd", "AfterModel"):
+        return None
+
+    return base
+
+
+def main():
+    raw = sys.stdin.read().strip()
+    if not raw:
+        sys.exit(0)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    tool = detect_tool(data)
+    entry = normalize(data, tool)
+    if not entry:
+        sys.exit(0)
+
+    log_dir = Path(os.environ.get("AI_LOG_DIR", ".ai-log"))
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "session.jsonl"
+
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    # Output valid JSON (required by some tools like Gemini)
+    print(json.dumps({"status": "logged"}))
+
+
+if __name__ == "__main__":
+    main()
