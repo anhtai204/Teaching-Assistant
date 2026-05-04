@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { 
   FileText, 
   Video, 
@@ -11,7 +13,8 @@ import {
   Share2, 
   Clock, 
   Bookmark,
-  ChevronLeft
+  ChevronLeft,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -38,6 +41,14 @@ export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, onClos
     
     if (['mp3', 'wav', 'm4a'].includes(type)) {
       return <AudioViewer url={material.url} name={material.name} />;
+    }
+
+    if (type === 'md' || material.url.toLowerCase().endsWith('.md')) {
+      return <MarkdownViewer url={material.url} />;
+    }
+
+    if (type === 'txt' || type === 'text' || material.url.toLowerCase().endsWith('.txt')) {
+      return <TextViewer url={material.url} />;
     }
     
     // Default to Document Viewer (PDF, etc.)
@@ -107,6 +118,98 @@ export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, onClos
 
 /* Sub-Components for Different Types */
 
+const TextViewer: React.FC<{ url: string }> = ({ url }) => {
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAndDecode = async () => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const buffer = await blob.arrayBuffer();
+        
+        // Try UTF-8 first
+        let decoder = new TextDecoder("utf-8");
+        let text = decoder.decode(buffer);
+        
+        // Check for common mojibake/garbage characters (replacement character )
+        if (text.includes('') || text.includes('\ufffd')) {
+          // If UTF-8 looks wrong, try Windows-1258 (Vietnamese)
+          const vnDecoder = new TextDecoder("windows-1258");
+          const vnText = vnDecoder.decode(buffer);
+          // If it seems better (fewer replacement characters), use it
+          if (vnText.split('\ufffd').length < text.split('\ufffd').length) {
+            text = vnText;
+          }
+        }
+        
+        setContent(text);
+      } catch (err) {
+        console.error("Error decoding text file:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAndDecode();
+  }, [url]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <span className="text-xs font-bold text-white/20 tracking-widest uppercase">Decoding Text...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full overflow-auto bg-white/95 p-12">
+      <pre className="max-w-4xl mx-auto text-slate-800 font-mono text-sm whitespace-pre-wrap break-words leading-relaxed">
+        {content}
+      </pre>
+    </div>
+  );
+};
+
+const MarkdownViewer: React.FC<{ url: string }> = ({ url }) => {
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(url)
+      .then(res => res.text())
+      .then(text => {
+        setContent(text);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching markdown:", err);
+        setLoading(false);
+      });
+  }, [url]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <span className="text-xs font-bold text-white/20 tracking-widest uppercase">Reading Data...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full overflow-auto bg-white/95 p-12">
+      <div className="max-w-4xl mx-auto prose prose-indigo prose-lg">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+};
+
 const VideoViewer: React.FC<{ url: string }> = ({ url }) => {
   return (
     <div className="w-full h-full flex items-center justify-center bg-black">
@@ -156,7 +259,6 @@ const DocumentViewer: React.FC<{ url: string }> = ({ url }) => {
         className="w-full h-full border-none"
         title="Document Viewer"
       />
-      {/* Overlay a subtle glass layer on the edges if needed, but iframe is sensitive */}
     </div>
   );
 };

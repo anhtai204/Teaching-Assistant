@@ -156,11 +156,13 @@ export default function StudentCourseWorkspace() {
                       ) : (
                         <Button variant="outline" size="sm" className="flex-1 text-xs font-bold opacity-50 cursor-not-allowed" disabled>Locked by Lecturer</Button>
                       )}
-                      <Button variant="ghost" size="sm" className="text-brand-600 hover:bg-brand-50" disabled={!m.is_visible}>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                      </Button>
+                      <a href={m.url} download={m.name} target="_blank" rel="noopener noreferrer">
+                        <Button variant="ghost" size="sm" className="text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/20" disabled={!m.is_visible}>
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </Button>
+                      </a>
                     </div>
                   </Card>
                 ))}
