@@ -78,7 +78,7 @@ class DocumentChunk(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"))
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(3072)) # Optimized for gemini-embedding-001 (3072 dimensions)
+    embedding = Column(Vector(768)) # Optimized for text-embedding-004 (768 dimensions)
     metadata_json = Column("metadata", JSONB, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

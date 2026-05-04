@@ -35,19 +35,34 @@ async def startup_event():
         # Check if any user exists
         user_count = db.query(User).count()
         if user_count == 0:
-            print("✨ No users found. Creating default lecturer account...")
-            salt = bcrypt.gensalt()
-            hashed_pw = bcrypt.hashpw("lecturer123".encode('utf-8'), salt).decode('utf-8')
+            # Create default lecturer
+            salt_lec = bcrypt.gensalt()
+            hashed_pw_lec = bcrypt.hashpw("lecturer123".encode('utf-8'), salt_lec).decode('utf-8')
             
             default_lecturer = User(
                 email="lecturer@university.edu",
-                password_hash=hashed_pw,
+                password_hash=hashed_pw_lec,
                 full_name="Default Lecturer",
                 role="lecturer"
             )
             db.add(default_lecturer)
+
+            # Create default student
+            salt_stu = bcrypt.gensalt()
+            hashed_pw_stu = bcrypt.hashpw("student123".encode('utf-8'), salt_stu).decode('utf-8')
+            
+            default_student = User(
+                email="student@university.edu",
+                password_hash=hashed_pw_stu,
+                full_name="Default Student",
+                role="student"
+            )
+            db.add(default_student)
+            
             db.commit()
-            print("✅ Default lecturer created: lecturer@university.edu / lecturer123")
+            print("✅ Default accounts created:")
+            print("   - Lecturer: lecturer@university.edu / lecturer123")
+            print("   - Student:  student@university.edu / student123")
     except Exception as e:
         print(f"❌ Error during initialization: {e}")
     finally:

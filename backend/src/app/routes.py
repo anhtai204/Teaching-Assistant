@@ -224,9 +224,19 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
         if hasattr(vectorstore, "_collection"):
             vectorstore._collection.delete(where={"document_id": str(document_id)})
         
-        # 2. Remove file from disk (optional but recommended)
-        if os.path.exists(doc.storage_url):
-            os.remove(doc.storage_url)
+        # 2. Remove file from Supabase Storage
+        from src.supabase_client import supabase
+        try:
+            # Extract path from storage_url
+            # URL format: .../storage/v1/object/public/course-materials/course_id/safe_filename
+            parts = doc.storage_url.split('/')
+            if len(parts) >= 2:
+                # The last two parts are course_id/safe_filename
+                storage_path = f"{parts[-2]}/{parts[-1]}"
+                supabase.storage.from_("course-materials").remove([storage_path])
+        except Exception as storage_err:
+            print(f"Error deleting from Supabase Storage: {storage_err}")
+            # We continue even if storage delete fails to keep DB clean
             
         # 3. SQL CASCADE will handle DocumentChunk if configured correctly
         # In our models.py, chunks has ondelete="CASCADE"
@@ -546,15 +556,9 @@ async def upload_material(
     db: Session = Depends(get_db)
 ):
     try:
-        # 1. Create directory if not exists
-        os.makedirs(DOCUMENT_PATH, exist_ok=True)
+        from src.supabase_client import supabase
         
-        # 2. Save file to disk
-        file_path = os.path.join(DOCUMENT_PATH, file.filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # 3. Check for existing document to prevent duplicates
+        # 1. Check for existing document to prevent duplicates
         existing_doc = db.query(Document).filter(
             Document.course_id == course_id,
             Document.name == file.filename
@@ -568,25 +572,59 @@ async def upload_material(
                 "status": existing_doc.status
             }
 
+        # 2. Upload to Supabase Storage
+        file_content = await file.read()
+        
+        # Sanitize filename to avoid "InvalidKey" errors with spaces/special chars
+        import re
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
+        storage_path = f"{course_id}/{safe_filename}"
+        
+        # Ensure bucket exists (or handle error if it doesn't)
+        try:
+            # Note: Upsert=True allows replacing if needed
+            res = supabase.storage.from_("course-materials").upload(
+                path=storage_path,
+                file=file_content,
+                file_options={"upsert": "true", "content-type": file.content_type}
+            )
+        except Exception as storage_err:
+            print(f"Supabase Storage Error: {storage_err}")
+            # Fallback to local if storage fails? No, better to fail and inform.
+            raise HTTPException(status_code=500, detail=f"Storage upload failed: {str(storage_err)}")
+
+        # 3. Get public URL
+        storage_url = supabase.storage.from_("course-materials").get_public_url(storage_path)
+
+        # 4. Create local temporary file for ingestion (since ingest_file needs a path)
+        os.makedirs("temp_uploads", exist_ok=True)
+        temp_path = os.path.join("temp_uploads", file.filename)
+        with open(temp_path, "wb") as f:
+            f.write(file_content)
+
         new_doc = Document(
             course_id=course_id,
             name=file.filename,
             file_type=file.filename.split('.')[-1],
-            storage_url=file_path.replace('\\', '/'),
+            storage_url=storage_url,
             status="processing"
         )
         db.add(new_doc)
         db.commit()
         db.refresh(new_doc)
         
-        # 4. Trigger Ingestion (Chunking, VectorDB & PostgreSQL)
-        num_chunks = ingest_file(file_path, str(new_doc.id), course_id, db)
+        # 5. Trigger Ingestion (using the local temp file)
+        num_chunks = ingest_file(temp_path, str(new_doc.id), course_id, db)
         
-        # 5. Update Document status
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        # 6. Update Document status
         new_doc.status = "indexed"
         db.commit()
         
-        # 6. Log to session.jsonl
+        # 7. Log to session.jsonl
         append_conversation_turn(
             user_id="lecturer_system",
             user_text=f"Uploaded and indexed: {file.filename}",
