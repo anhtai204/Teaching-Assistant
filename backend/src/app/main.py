@@ -2,11 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
-from src.app.routes import router
-from src.app.moderation_routes import router as moderation_router
-from src.app.analytics_routes import router as analytics_router
-from src.database import SessionLocal, engine, Base
-from src.models import User
+try:
+    from src.app.routes import router
+    from src.app.moderation_routes import router as moderation_router
+    from src.app.analytics_routes import router as analytics_router
+    from src.database import SessionLocal, engine, Base
+    from src.models import User
+except ImportError:
+    from app.routes import router
+    from app.moderation_routes import router as moderation_router
+    from app.analytics_routes import router as analytics_router
+    from database import SessionLocal, engine, Base
+    from models import User
 import bcrypt
 
 app = FastAPI(title="AI Teaching Assistant API")

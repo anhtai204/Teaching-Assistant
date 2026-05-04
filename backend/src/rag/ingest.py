@@ -1,9 +1,14 @@
 from typing import Optional, List
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from src.rag.embedding import get_embedding
-from src.rag.vectorstore import get_vectorstore, add_documents
-from src.config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
+try:
+    from src.rag.embedding import get_embedding
+    from src.rag.vectorstore import get_vectorstore, add_documents
+    from src.config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
+except ImportError:
+    from rag.embedding import get_embedding
+    from rag.vectorstore import get_vectorstore, add_documents
+    from config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
 
 # Ensure ffmpeg installed via winget is available in PATH
 winget_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links")

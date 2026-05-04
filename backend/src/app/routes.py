@@ -217,7 +217,10 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
     
     try:
         # 1. Remove from VectorDB (Chroma)
-        from src.rag.vectorstore import get_vectorstore
+        try:
+            from src.rag.vectorstore import get_vectorstore
+        except ImportError:
+            from rag.vectorstore import get_vectorstore
         vectorstore = get_vectorstore()
         # Note: LangChain Chroma delete by filter might vary by version
         # If .delete() doesn't support filter, we use the collection directly
@@ -225,7 +228,10 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
             vectorstore._collection.delete(where={"document_id": str(document_id)})
         
         # 2. Remove file from Supabase Storage
-        from src.supabase_client import supabase
+        try:
+            from src.supabase_client import supabase
+        except ImportError:
+            from supabase_client import supabase
         try:
             # Extract path from storage_url
             # URL format: .../storage/v1/object/public/course-materials/course_id/safe_filename
@@ -556,7 +562,10 @@ async def upload_material(
     db: Session = Depends(get_db)
 ):
     try:
-        from src.supabase_client import supabase
+        try:
+            from src.supabase_client import supabase
+        except ImportError:
+            from supabase_client import supabase
         
         # 1. Check for existing document to prevent duplicates (only if course_id is provided)
         if course_id:
