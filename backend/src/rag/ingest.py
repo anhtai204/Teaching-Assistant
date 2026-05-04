@@ -130,7 +130,7 @@ def ingest():
     # This remains for batch processing if needed, but would need db session
     pass
 
-def ingest_file(file_path: str, document_id: str, course_id: str, db: Session):
+def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: Session):
     """Processes a single file and adds it to both vector store and PostgreSQL."""
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")

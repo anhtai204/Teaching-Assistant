@@ -551,26 +551,27 @@ async def resolve_moderation(message_id: str, request: ResolveRequest, db: Sessi
 
 @router.post("/api/materials/upload")
 async def upload_material(
-    course_id: str,
+    course_id: Optional[str] = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     try:
         from src.supabase_client import supabase
         
-        # 1. Check for existing document to prevent duplicates
-        existing_doc = db.query(Document).filter(
-            Document.course_id == course_id,
-            Document.name == file.filename
-        ).first()
-        
-        if existing_doc:
-            print(f"Document {file.filename} already exists, skipping duplicate creation.")
-            return {
-                "message": f"Document {file.filename} already exists",
-                "document_id": str(existing_doc.id),
-                "status": existing_doc.status
-            }
+        # 1. Check for existing document to prevent duplicates (only if course_id is provided)
+        if course_id:
+            existing_doc = db.query(Document).filter(
+                Document.course_id == course_id,
+                Document.name == file.filename
+            ).first()
+            
+            if existing_doc:
+                print(f"Document {file.filename} already exists in course {course_id}, skipping duplicate creation.")
+                return {
+                    "message": f"Document {file.filename} already exists",
+                    "document_id": str(existing_doc.id),
+                    "status": existing_doc.status
+                }
 
         # 2. Upload to Supabase Storage
         file_content = await file.read()
@@ -578,7 +579,9 @@ async def upload_material(
         # Sanitize filename to avoid "InvalidKey" errors with spaces/special chars
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
-        storage_path = f"{course_id}/{safe_filename}"
+        # Use a default folder if course_id is missing
+        folder_name = course_id if course_id else "unclassified"
+        storage_path = f"{folder_name}/{safe_filename}"
         
         # Ensure bucket exists (or handle error if it doesn't)
         try:
@@ -645,11 +648,14 @@ async def upload_material(
 @router.get("/api/materials")
 async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[str] = None, db: Session = Depends(get_db)):
     """Returns materials filtered by course or all materials for a lecturer."""
-    query = db.query(Document).join(Course)
+    query = db.query(Document)
     if course_id:
         query = query.filter(Document.course_id == course_id)
     elif lecturer_id:
-        query = query.filter(Course.lecturer_id == lecturer_id)
+        # Join with Course to filter by lecturer, but also include documents with NO course
+        # if they were uploaded by this lecturer (need to add lecturer_id to Document table or handle differently)
+        # For now, let's just return documents that belong to any of the lecturer's courses
+        query = query.join(Course).filter(Course.lecturer_id == lecturer_id)
     else:
         return []
     documents = query.order_by(Document.created_at.desc()).all()

@@ -121,7 +121,12 @@ function MaterialsContent() {
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/upload?course_id=${courseId}`, {
+      let uploadUrl = `${baseUrl}/api/materials/upload`;
+      if (courseId) {
+        uploadUrl += `?course_id=${courseId}`;
+      }
+      
+      const response = await fetch(uploadUrl, {
         method: "POST",
         body: formData,
       });

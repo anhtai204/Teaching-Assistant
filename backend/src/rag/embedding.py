@@ -14,7 +14,7 @@ def get_embedding():
             
         print(f"Initializing Google Embedding (API)...")
         embedding_model = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001", 
+            model="models/text-embedding-004", 
             google_api_key=api_key,
             output_dimensionality=768
         )
