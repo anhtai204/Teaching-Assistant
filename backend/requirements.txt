@@ -24,6 +24,8 @@ tiktoken>=0.7.0
 sentence-transformers>=3.0.1
 langchain-chroma>=0.1.0
 chromadb>=0.5.0
+rank-bm25>=0.2.2
+google-generativeai>=0.8.0
 
 # Document & Audio Processing
 markitdown>=0.1.5
