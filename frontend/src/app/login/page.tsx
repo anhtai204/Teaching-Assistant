@@ -3,14 +3,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, Input } from "@/components/ui/FormElements";
 
 export default function LoginPage() {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      if ((session.user as any).role === "lecturer") {
+        router.push("/lecturer/dashboard");
+      } else {
+        router.push("/student/dashboard");
+      }
+    }
+  }, [session, status, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +189,7 @@ export default function LoginPage() {
                 variant="outline"
                 className="w-full py-4 flex items-center justify-center gap-3 font-bold border-2"
                 type="button"
-                onClick={() => signIn("google")}
+                onClick={() => signIn("google", { callbackUrl: "/student/dashboard" })}
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
