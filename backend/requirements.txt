@@ -15,20 +15,20 @@ python-dotenv>=1.0.0
 
 # AI & RAG
 langgraph>=0.2.0,<0.3.0
-langchain==0.2.14
-langchain-community==0.2.12
-langchain-core==0.2.33
-langchain-google-genai==1.0.10
-langchain-text-splitters==0.2.2
-tiktoken==0.7.0
-sentence-transformers==3.0.1
-langchain-chroma==1.1.0
-chromadb==1.5.8
+langchain>=0.2.14
+langchain-community>=0.2.12
+langchain-core>=0.2.33
+langchain-google-genai>=1.0.10
+langchain-text-splitters>=0.2.2
+tiktoken>=0.7.0
+sentence-transformers>=3.0.1
+langchain-chroma>=0.1.0
+chromadb>=0.5.0
 
 # Document & Audio Processing
-markitdown==0.1.5
+markitdown>=0.1.5
 faster-whisper
-numpy==1.26.4
+numpy>=1.26.0
 
 # Security & Utilities
 bcrypt==4.2.0
