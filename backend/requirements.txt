@@ -24,7 +24,7 @@ tiktoken==0.7.0
 sentence-transformers==3.0.1
 
 # Document & Audio Processing
-markitdown==0.0.1
+markitdown==0.1.5
 faster-whisper
 numpy==1.26.4
 
