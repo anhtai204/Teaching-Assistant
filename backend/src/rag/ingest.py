@@ -11,7 +11,6 @@ if winget_path not in os.environ.get("PATH", ""):
 
 from markitdown import MarkItDown
 from langchain_core.documents import Document as LCDocument
-from faster_whisper import WhisperModel
 import os
 
 md = MarkItDown()
@@ -20,6 +19,7 @@ _whisper_model = None
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
+        from faster_whisper import WhisperModel
         print("Loading Faster-Whisper model (small) with INT8 quantization for efficiency...")
         # 'small' is great for Vietnamese. int8 makes it very light on RAM.
         _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
