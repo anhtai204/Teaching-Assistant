@@ -11,39 +11,47 @@ from src.memory.memory_service import load_memory, save_memory
 
 load_dotenv()  # Load environment variables from .env file
 
+from src.database import SessionLocal
+from src.models import DocumentChunk, Document
+
 def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
     """
-    Dense retrieval: tìm kiếm theo embedding similarity trong ChromaDB.
-
-    Args:
+    Dense retrieval: tìm kiếm theo embedding similarity trong Supabase pgvector.
     """
+    db = SessionLocal()
+    try:
+        embedding_model = get_embedding()
+        # Generate query embedding
+        if hasattr(embedding_model, "embed_query"):
+            query_embedding = embedding_model.embed_query(query)
+        else:
+            query_embedding = embedding_model.encode(query).tolist()
+            
+        # Use pgvector cosine distance search
+        # We join with Document to respect visibility settings
+        results = db.query(DocumentChunk, Document).join(Document).filter(
+            Document.course_id == str(course_id),
+            Document.is_visible == True,
+            Document.status == "indexed"
+        ).order_by(
+            DocumentChunk.embedding.cosine_distance(query_embedding)
+        ).limit(top_k).all()
 
-    vectorstore = get_vectorstore()
-    
-    # Filter only visible documents for this specific course
-    filter_query = {
-        "$and": [
-            {"course_id": {"$eq": str(course_id)}},
-            {"is_visible": {"$eq": True}}
-        ]
-    }
-    
-    results = vectorstore.similarity_search_with_score(
-        query,
-        k=top_k,
-        filter=filter_query
-    )
+        chunks = []
+        for chunk, doc in results:
+            # Score here is distance (0 is perfect match), we can convert to similarity if needed
+            chunks.append({
+                "text": chunk.content,
+                "metadata": {**chunk.metadata_json, "source": doc.name},
+                "score": 1.0 
+            })
 
-    chunks = []
-
-    for doc, score in results:
-        chunks.append({
-            "text": doc.page_content,
-            "metadata": doc.metadata,
-            "score": float(score)
-        })
-
-    return chunks
+        return chunks
+    except Exception as e:
+        print(f"Error in retrieve_dense (pgvector): {e}")
+        return []
+    finally:
+        db.close()
 
 import re
 from rank_bm25 import BM25Okapi
@@ -191,15 +199,21 @@ def retrieve_hybrid(
 
 import numpy as np
 
-try:
-    from sentence_transformers import CrossEncoder
-    RERANK_MODEL = CrossEncoder(
-        "cross-encoder/ms-marco-MiniLM-L-6-v2",
-        device="cpu"  # hoặc cuda
-    )
-except ImportError:
-    RERANK_MODEL = None
-    print("Warning: sentence_transformers not installed. Reranking will be disabled.")
+RERANK_MODEL = None
+
+def get_rerank_model():
+    global RERANK_MODEL
+    if RERANK_MODEL is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            print("Loading CrossEncoder Rerank model...")
+            RERANK_MODEL = CrossEncoder(
+                "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                device="cpu"
+            )
+        except ImportError:
+            print("Warning: sentence_transformers not installed. Reranking will be disabled.")
+    return RERANK_MODEL
 
 def mmr(doc_scores, embeddings, lambda_param=0.5, top_k=5):
     """
@@ -249,13 +263,14 @@ def rerank(
     if not candidates:
         return []
 
-    if RERANK_MODEL is None:
+    model = get_rerank_model()
+    if model is None:
         print("RERANK_MODEL is not available. Skipping reranking.")
         return candidates[:top_k]
 
     pairs = [[query, c["text"]] for c in candidates]
 
-    scores = RERANK_MODEL.predict(pairs)
+    scores = model.predict(pairs)
 
     # attach scores
     for c, s in zip(candidates, scores):
