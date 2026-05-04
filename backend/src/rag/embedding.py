@@ -1,25 +1,30 @@
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # from langchain_openai import OpenAIEmbeddings
+from dotenv import load_dotenv
 import os
+load_dotenv()
 
 def get_embedding():
     try:
         # Use Google Generative AI Embeddings
         api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            from src.config import GOOGLE_API_KEY as config_key
+            api_key = config_key
+            
+        print(f"Initializing Google Embedding (API)...")
         embedding_model = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001", 
-            google_api_key=api_key
+            google_api_key=api_key,
+            output_dimensionality=768
         )
-        # Test if it works
-        embedding_model.embed_query("test")
-        print("Using GoogleGenerativeAIEmbeddings (models/embedding-001).")
         return embedding_model
     except Exception as e:
-        print(f"Error occurred while initializing GoogleEmbeddings: {e}")
+        print(f"⚠️ Google Embeddings API failed, attempting lightweight fallback: {e}")
         
-        # Fallback to SentenceTransformer via LangChain
-        print("Falling back to HuggingFaceEmbeddings.")
+        # Lazy load heavy library only if needed
         from langchain_community.embeddings import HuggingFaceEmbeddings
+        # Use a much smaller model for fallback to save RAM
         return HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 
         # Original OpenAI logic (commented out)
