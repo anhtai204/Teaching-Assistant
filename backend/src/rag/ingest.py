@@ -1,3 +1,4 @@
+from typing import Optional, List
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.rag.embedding import get_embedding
@@ -124,7 +125,6 @@ def chunk_documents(documents):
 
 from src.models import DocumentChunk
 from sqlalchemy.orm import Session
-from typing import List
 
 def ingest():
     # This remains for batch processing if needed, but would need db session
@@ -150,10 +150,10 @@ def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: 
             content = result.text_content
         
         if not content or len(content.strip()) == 0:
-            print(f"⚠️ Warning: No content extracted from {file_name}")
+            print(f"⚠️ Warning: No content extracted from {file_name}. Please check if the file is empty or password protected.")
             return 0
             
-        print(f"Extracted {len(content)} characters.")
+        print(f"Extracted {len(content)} characters from {file_name}.")
 
         doc = LCDocument(
             page_content=content,
