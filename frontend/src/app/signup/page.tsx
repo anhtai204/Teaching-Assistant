@@ -42,10 +42,20 @@ export default function SignUpPage() {
         throw new Error(data.error || "Failed to create account. Please try again.");
       }
 
-      router.push("/login?signup=success");
+      // Automatically sign in after signup
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        router.push("/login?signup=success");
+      } else {
+        router.push("/student/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setIsLoading(false);
     }
   };
