@@ -12,7 +12,7 @@ from src.graph.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-def get_llm(temperature=0.1, timeout=30):
+def get_llm(temperature=0.1, timeout=20):
     """Factory to get the correct LLM based on DEFAULT_MODEL."""
     model_name = DEFAULT_MODEL.lower()
     
@@ -86,7 +86,7 @@ def tutor_node(state: AgentState) -> dict:
     rebuilt_messages = list(base_messages)
     
     # Use lower temperature for academic grounding
-    _strict_llm = get_llm(temperature=0.1, timeout=30).with_fallbacks([
+    _strict_llm = get_llm(temperature=0.1, timeout=20).with_fallbacks([
         ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
     ])
 

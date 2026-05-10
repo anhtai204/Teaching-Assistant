@@ -11,7 +11,7 @@ from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.config import DEFAULT_MODEL, OPENAI_API_KEY, GOOGLE_API_KEY
 
-def get_router_llm(timeout=30):
+def get_router_llm(timeout=20):
     """Factory for router LLM."""
     model_name = DEFAULT_MODEL.lower()
     
