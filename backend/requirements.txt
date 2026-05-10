@@ -12,6 +12,7 @@ psycopg2-binary>=2.9.0
 pgvector>=0.2.0
 supabase>=2.10.0
 python-dotenv>=1.0.0
+langchain-openai
 
 # AI & RAG
 langgraph>=0.2.0,<0.3.0
@@ -40,3 +41,5 @@ bcrypt==4.2.0
 pydantic==2.8.2
 pydantic-settings==2.4.0
 requests==2.32.3
+httpx>=0.27.0
+openai-whisper>=20231117

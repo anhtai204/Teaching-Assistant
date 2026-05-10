@@ -19,6 +19,6 @@ def retrieval_node(state: AgentState) -> dict:
 
     result = run_retrieval(question, course_id=state.get("course_id", "default"), mode="hybrid", top_k=5)
     return {
-        "retrieved_chunks": result.get("chunks", []),
+        "context": result.get("chunks", []),
         "sources": result.get("sources", []),
     }

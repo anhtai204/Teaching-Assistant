@@ -30,8 +30,9 @@ function ModerationContent() {
 
   const [messages, setMessages] = useState<FlaggedMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [answer, setAnswer] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchPending();
@@ -54,7 +55,10 @@ function ModerationContent() {
   };
 
   const handleResolve = async (id: string) => {
-    if (!answer.trim()) return;
+    const manualAnswer = answers[id];
+    if (!manualAnswer || !manualAnswer.trim()) return;
+    
+    setIsSubmitting(true);
     setResolvingId(id);
     
     try {
@@ -62,16 +66,21 @@ function ModerationContent() {
       const response = await fetch(`${baseUrl}/api/moderation/resolve/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manual_answer: answer }),
+        body: JSON.stringify({ manual_answer: manualAnswer }),
       });
 
       if (response.ok) {
         setMessages(prev => prev.filter(m => m.id !== id));
-        setAnswer("");
-        setResolvingId(null);
+        setAnswers(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
       }
     } catch (error) {
       console.error("Resolve error:", error);
+    } finally {
+      setIsSubmitting(false);
       setResolvingId(null);
     }
   };
@@ -129,18 +138,19 @@ function ModerationContent() {
                     <textarea 
                       className="w-full h-32 p-4 bg-white dark:bg-[#0F0F23] border border-slate-200 dark:border-white/10 rounded-2xl text-sm dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none"
                       placeholder="Type the correct answer here..."
-                      value={resolvingId === msg.id ? answer : ""}
+                      value={answers[msg.id] || ""}
                       onChange={(e) => {
-                        setResolvingId(msg.id);
-                        setAnswer(e.target.value);
+                        setAnswers(prev => ({ ...prev, [msg.id]: e.target.value }));
                       }}
+                      disabled={isSubmitting}
                     />
                     <Button 
                       className="w-full" 
                       onClick={() => handleResolve(msg.id)}
-                      disabled={resolvingId === msg.id && !answer}
+                      disabled={isSubmitting || !answers[msg.id]?.trim()}
+                      isLoading={isSubmitting && resolvingId === msg.id}
                     >
-                      {resolvingId === msg.id && answer ? "Submitting..." : "Send to Student & Save to FAQ"}
+                      {isSubmitting && resolvingId === msg.id ? "Submitting..." : "Send to Student & Save to FAQ"}
                     </Button>
                   </div>
                 </div>

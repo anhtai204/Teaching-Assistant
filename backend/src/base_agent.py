@@ -29,6 +29,7 @@ async def astream_agent(
     user_id: str = "default",
     session_id: str = "default",
     course_id: str = "default",
+    user_profile: dict = None,
 ):
     """
     Async generator that yields tokens and metadata from the LangGraph.
@@ -39,6 +40,7 @@ async def astream_agent(
     """
     
     initial_state = {
+        "user_profile": user_profile or {},
         "messages": [HumanMessage(content=user_input)],
         "user_id": user_id,
         "session_id": session_id,
@@ -48,7 +50,7 @@ async def astream_agent(
         "summary_block": "",
         "route": "",
         "route_reason": "",
-        "retrieved_chunks": [],
+        "context": [],
         "final_answer": "",
     }
 
@@ -61,7 +63,7 @@ async def astream_agent(
             # Check for retrieval results to send sources early
             if "retrieval" in event:
                 sources = event["retrieval"].get("sources", [])
-                chunks = event["retrieval"].get("retrieved_chunks", [])
+                chunks = event["retrieval"].get("context", [])
                 yield f"data: {{\"type\": \"metadata\", \"sources\": {list(sources)}, \"chunks\": {chunks}}}\n\n"
 
             # Check for tutor results
@@ -74,9 +76,11 @@ async def astream_agent(
                     # we'll simulate token streaming for better UI experience 
                     # or update the tutor node to stream tokens.
                     # For now, we yield the whole answer as one chunk or simulate:
+                    import json
                     words = final_answer.split(' ')
                     for word in words:
-                        yield f"data: {{\"type\": \"token\", \"content\": \"{word} \"}}\n\n"
+                        chunk_str = json.dumps({"type": "token", "content": f"{word} "})
+                        yield f"data: {chunk_str}\n\n"
         
         yield "data: [DONE]\n\n"
 
@@ -89,9 +93,11 @@ def run_agent(
     user_id: str = "default",
     session_id: str = "default",
     course_id: str = "default",
+    user_profile: dict = None,
 ) -> str:
     """Run the agent synchronously and return the final answer."""
     initial_state = {
+        "user_profile": user_profile or {},
         "messages": [HumanMessage(content=user_input)],
         "user_id": user_id,
         "session_id": session_id,
@@ -101,7 +107,7 @@ def run_agent(
         "summary_block": "",
         "route": "",
         "route_reason": "",
-        "retrieved_chunks": [],
+        "context": [],
         "final_answer": "",
     }
     result = graph.invoke(initial_state, {"recursion_limit": 25})

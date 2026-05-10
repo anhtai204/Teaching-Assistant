@@ -5,6 +5,8 @@ from pathlib import Path
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-1.5-flash")
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -15,8 +17,8 @@ CHROMA_TENANT = os.getenv("CHROMA_TENANT", "default_tenant")
 CHROMA_DATABASE = os.getenv("CHROMA_DATABASE", "default_database")
 CHROMA_API_KEY = os.getenv("CHROMA_API_KEY")
 
-CHUNK_SIZE = 400       # tokens (ước lượng bằng số ký tự / 4)
-CHUNK_OVERLAP = 80 
+CHUNK_SIZE = 500       # Match Vercel_Proj standard
+CHUNK_OVERLAP = 50 
 TOP_K_SEARCH = 10    # Số chunk lấy từ vector store trước rerank (search rộng)
 TOP_K_SELECT = 3 
 

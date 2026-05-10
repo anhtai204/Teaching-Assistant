@@ -13,6 +13,8 @@ from src.rag.ingest import ingest_file
 from src.config import DOCUMENT_PATH
 from src.memory.memory_store import append_conversation_turn
 from src.utils.security import generate_enrollment_code
+from src.utils.user_service import get_user_profile_sync
+from src.roadmap.roadmap_service import generate_roadmap_with_llm
 
 router = APIRouter()
 
@@ -219,39 +221,36 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
         # 1. Remove from VectorDB (Chroma)
         try:
             from src.rag.vectorstore import get_vectorstore
-        except ImportError:
-            from rag.vectorstore import get_vectorstore
-        vectorstore = get_vectorstore()
-        # Note: LangChain Chroma delete by filter might vary by version
-        # If .delete() doesn't support filter, we use the collection directly
-        if hasattr(vectorstore, "_collection"):
-            vectorstore._collection.delete(where={"document_id": str(document_id)})
+            vectorstore = get_vectorstore()
+            if hasattr(vectorstore, "_collection"):
+                print(f"[DELETE] Removing chunks for doc {document_id} from Chroma")
+                vectorstore._collection.delete(where={"document_id": str(document_id)})
+        except Exception as v_err:
+            print(f"[DELETE] VectorDB error (skipping): {v_err}")
         
         # 2. Remove file from Supabase Storage
         try:
             from src.supabase_client import supabase
-        except ImportError:
-            from supabase_client import supabase
-        try:
-            # Extract path from storage_url
-            # URL format: .../storage/v1/object/public/course-materials/course_id/safe_filename
-            parts = doc.storage_url.split('/')
-            if len(parts) >= 2:
-                # The last two parts are course_id/safe_filename
-                storage_path = f"{parts[-2]}/{parts[-1]}"
-                supabase.storage.from_("course-materials").remove([storage_path])
+            if supabase and doc.storage_url:
+                # Extract path from storage_url
+                # URL format: .../storage/v1/object/public/course-materials/course_id/safe_filename
+                parts = doc.storage_url.split('/')
+                if len(parts) >= 2:
+                    storage_path = f"{parts[-2]}/{parts[-1]}"
+                    print(f"[DELETE] Removing file {storage_path} from Supabase Storage")
+                    supabase.storage.from_("course-materials").remove([storage_path])
         except Exception as storage_err:
-            print(f"Error deleting from Supabase Storage: {storage_err}")
-            # We continue even if storage delete fails to keep DB clean
+            print(f"[DELETE] Supabase Storage error (skipping): {storage_err}")
             
-        # 3. SQL CASCADE will handle DocumentChunk if configured correctly
-        # In our models.py, chunks has ondelete="CASCADE"
+        # 3. Delete from SQL Database
+        print(f"[DELETE] Removing document {document_id} from SQL DB")
         db.delete(doc)
         db.commit()
         
         return {"message": "Material deleted successfully"}
     except Exception as e:
         db.rollback()
+        print(f"[DELETE] Final fallback error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/api/materials/{document_id}/visibility")
@@ -318,16 +317,20 @@ async def update_course_settings(course_id: str, request: CourseSettingsUpdate, 
 @router.post("/api/chat")
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
-        # 1. Resolve Session
+        # 1. Resolve Profile & Session
+        profile = get_user_profile_sync(db, request.user_id)
         session = None
         if request.session_id and request.session_id != "default":
             session = db.query(ChatSession).filter(ChatSession.id == request.session_id).first()
         
         if not session:
-            # Create a new session if not found or not provided
-            # Note: For demo, we might need a valid student_id and course_id
-            # For now, we'll try to find a default user or use the first one
-            user = db.query(User).filter(User.email == "test@example.com").first()
+            # Use profile ID if valid UUID, else fallback
+            try:
+                uid = UUID(request.user_id)
+                user = db.query(User).filter(User.id == uid).first()
+            except:
+                user = db.query(User).filter(User.email == "test@example.com").first()
+            
             if not user:
                 user = db.query(User).first()
             
@@ -353,12 +356,13 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             db.add(user_msg)
             db.commit()
 
-        # 3. Run Agent
+        # 3. Run Agent with Profile
         response = run_agent(
             user_input=request.message,
             user_id=request.user_id,
             session_id=str(session.id) if session else "default",
-            course_id=request.course_id or "default"
+            course_id=request.course_id or "default",
+            user_profile=profile
         )
 
         # 4. Save Assistant Message
@@ -399,7 +403,8 @@ async def chat_stream(
     Streaming chat endpoint using SSE.
     """
     print(f"[CHAT_STREAM] Received message: '{message}' for course_id: '{course_id}'")
-    # 1. Get or Create Session
+    # 1. Resolve Profile & Session
+    profile = get_user_profile_sync(db, user_id)
     if session_id and session_id != "undefined":
         session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     else:
@@ -422,6 +427,9 @@ async def chat_stream(
     db.add(user_msg)
     db.commit()
 
+    # Capture session_id early to avoid DetachedInstanceError in generator
+    session_id_str = str(session.id)
+
     async def stream_and_save():
         full_content = ""
         metadata = {}
@@ -429,8 +437,9 @@ async def chat_stream(
         async for chunk in astream_agent(
             user_input=message,
             user_id=user_id,
-            session_id=str(session.id),
-            course_id=course_id
+            session_id=session_id_str,
+            course_id=course_id,
+            user_profile=profile
         ):
             if chunk.startswith("data: "):
                 data_str = chunk[6:].strip()
@@ -441,15 +450,14 @@ async def chat_stream(
                         if data.get("type") == "token":
                             full_content += data.get("content", "")
                         elif data.get("type") == "metadata":
-                            metadata = data
-                    except:
+                            metadata = data.get("metadata", {})
+                    except Exception:
                         pass
             yield chunk
         
-        # Save Assistant Message once done
         if full_content:
             assistant_msg = ChatMessage(
-                session_id=session.id,
+                session_id=session_id_str,
                 role="assistant",
                 content=full_content,
                 sources=metadata.get("sources", [])
@@ -457,6 +465,25 @@ async def chat_stream(
             db.add(assistant_msg)
             db.commit()
             db.refresh(assistant_msg)
+            
+            # Send a final debug chunk so the user can check the raw output
+            debug_data = {
+                "type": "debug",
+                "content": full_content,
+                "metadata": metadata
+            }
+            import json
+            yield f"data: {json.dumps(debug_data)}\n\n"
+            
+            # Log to conversation history file
+            from src.memory.memory_store import append_conversation_turn
+            append_conversation_turn(
+                user_id=user_id,
+                user_text=message,
+                assistant_text=full_content,
+                session_id=session_id_str
+            )
+            
             # Send the final message ID so frontend can use it for feedback
             yield f"data: {{\"type\": \"message_id\", \"id\": \"{str(assistant_msg.id)}\"}}\n\n"
             yield "data: [DONE]\n\n"
@@ -494,13 +521,14 @@ async def get_session_messages(session_id: UUID, db: Session = Depends(get_db)):
             "sources": m.sources,
             "is_flagged": m.is_flagged,
             "feedback_rating": m.feedback_rating,
+            "manual_answer": m.manual_answer,
             "created_at": m.created_at
         }
         for m in messages
     ]
 
 class FeedbackRequest(BaseModel):
-    rating: int # 1 or -1
+    rating: Optional[int] = None # 1 or -1
     comment: Optional[str] = None
     is_report: bool = False
 
@@ -510,8 +538,10 @@ async def submit_feedback(message_id: UUID, request: FeedbackRequest, db: Sessio
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
     
-    msg.feedback_rating = request.rating
-    msg.feedback_comment = request.comment
+    if request.rating is not None:
+        msg.feedback_rating = request.rating
+    if request.comment is not None:
+        msg.feedback_comment = request.comment
     if request.is_report:
         msg.is_flagged = True
     
@@ -523,7 +553,7 @@ async def get_pending_moderation(course_id: str, db: Session = Depends(get_db)):
     """Lecturer endpoint to see flagged messages."""
     messages = db.query(ChatMessage).join(ChatSession).filter(
         ChatSession.course_id == course_id,
-        ChatMessage.is_flagged == True,
+        (ChatMessage.is_flagged == True) | (ChatMessage.feedback_rating == -1),
         ChatMessage.manual_answer == None
     ).all()
     
@@ -534,9 +564,15 @@ async def get_pending_moderation(course_id: str, db: Session = Depends(get_db)):
                 ChatMessage.session_id == m.session_id, 
                 ChatMessage.created_at < m.created_at,
                 ChatMessage.role == "user"
-            ).order_by(ChatMessage.created_at.desc()).first().content,
-            "ai_answer": m.content,
-            "flagged_at": m.created_at
+            ).order_by(ChatMessage.created_at.desc()).first().content if db.query(ChatMessage).filter(
+                ChatMessage.session_id == m.session_id, 
+                ChatMessage.created_at < m.created_at,
+                ChatMessage.role == "user"
+            ).first() else "Unknown Question",
+            "content": m.content,
+            "created_at": m.created_at.isoformat(),
+            "is_flagged": m.is_flagged,
+            "was_unanswered": m.was_unanswered
         }
         for m in messages
     ]
@@ -562,12 +598,9 @@ async def upload_material(
     db: Session = Depends(get_db)
 ):
     try:
-        try:
-            from src.supabase_client import supabase
-        except ImportError:
-            from supabase_client import supabase
+        from src.supabase_client import supabase
         
-        # 1. Check for existing document to prevent duplicates (only if course_id is provided)
+        # 1. Check for existing document
         if course_id:
             existing_doc = db.query(Document).filter(
                 Document.course_id == course_id,
@@ -719,3 +752,98 @@ async def update_course(course_id: str, request: CourseCreate, db: Session = Dep
     course.description = request.description
     db.commit()
     return {'message': 'Course updated successfully'}
+@router.get("/api/roadmap")
+async def get_roadmap(user_id: str, db: Session = Depends(get_db)):
+    from src.models import RoadmapItem
+    # Kiểm tra xem sinh viên đã có lộ trình trong DB chưa
+    existing_items = db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id).order_by(RoadmapItem.created_at.desc()).all()
+    
+    if existing_items:
+        return {
+            "ok": True, 
+            "items": [
+                {
+                    "id": str(item.id),
+                    "topic": item.topic,
+                    "description": item.description,
+                    "priority": item.priority,
+                    "progress": item.progress,
+                    "status": item.status,
+                    "eta_minutes": item.eta_minutes
+                } for item in existing_items
+            ]
+        }
+    
+    # Nếu chưa có, tự động tạo mới (giống cơ chế Refresh)
+    return await refresh_roadmap(user_id, db)
+
+@router.post("/api/roadmap/refresh")
+async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
+    from src.models import RoadmapItem
+    
+    # Xóa lộ trình cũ
+    db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id).delete()
+    db.commit()
+
+    # Thu thập dữ liệu
+    history = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == user_id).limit(40).all()
+    history_dicts = [{"role": m.role, "content": m.content} for m in history]
+    
+    docs = db.query(Document).limit(10).all()
+    allowed_sources = [d.name for d in docs]
+    
+    # Gọi AI để tạo lộ trình mới
+    items = generate_roadmap_with_llm(user_id, history_dicts, allowed_sources)
+    
+    # Lưu vào Database
+    saved_items = []
+    for item in items:
+        new_item = RoadmapItem(
+            student_id=user_id,
+            topic=item.get("topic", "Unknown"),
+            description=item.get("description", ""),
+            priority=item.get("priority", "medium"),
+            progress=item.get("progress", 0),
+            status=item.get("status", "todo"),
+            eta_minutes=item.get("eta_minutes", 30)
+        )
+        db.add(new_item)
+        saved_items.append(new_item)
+    
+    db.commit()
+    
+    return {
+        "ok": True, 
+        "items": [
+            {
+                "id": str(item.id),
+                "topic": item.topic,
+                "description": item.description,
+                "priority": item.priority,
+                "progress": item.progress,
+                "status": item.status,
+                "eta_minutes": item.eta_minutes
+            } for item in saved_items
+        ]
+    }
+
+class RoadmapProgressUpdate(BaseModel):
+    progress: int
+
+@router.patch("/api/roadmap/{item_id}")
+async def update_roadmap_progress(item_id: str, request: RoadmapProgressUpdate, db: Session = Depends(get_db)):
+    from src.models import RoadmapItem
+    item = db.query(RoadmapItem).filter(RoadmapItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Roadmap item not found")
+    
+    item.progress = request.progress
+    if request.progress >= 100:
+        item.status = "done"
+    elif request.progress > 0:
+        item.status = "in_progress"
+    else:
+        item.status = "todo"
+        
+    db.commit()
+    return {"message": "Progress updated successfully", "progress": item.progress, "status": item.status}

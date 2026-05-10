@@ -1,14 +1,9 @@
 from typing import Optional, List
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-try:
-    from src.rag.embedding import get_embedding
-    from src.rag.vectorstore import get_vectorstore, add_documents
-    from src.config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
-except ImportError:
-    from rag.embedding import get_embedding
-    from rag.vectorstore import get_vectorstore, add_documents
-    from config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
+from src.rag.embedding import get_embedding
+from src.rag.vectorstore import get_vectorstore, add_documents
+from src.config import CHROMA_DB_DIR, DOCUMENT_PATH, CHUNK_SIZE, CHUNK_OVERLAP
 
 # Ensure ffmpeg installed via winget is available in PATH
 winget_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links")
@@ -25,10 +20,14 @@ _whisper_model = None
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
-        from faster_whisper import WhisperModel
-        print("Loading Faster-Whisper model (small) with INT8 quantization for efficiency...")
-        # 'small' is great for Vietnamese. int8 makes it very light on RAM.
-        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+        try:
+            from faster_whisper import WhisperModel
+            print("Loading Faster-Whisper model (small) with INT8 quantization for efficiency...")
+            # 'small' is great for Vietnamese. int8 makes it very light on RAM.
+            _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+        except ImportError:
+            print("❌ Error: 'faster-whisper' library not found. Please install it with 'pip install faster-whisper' to process audio/video files.")
+            raise ImportError("faster-whisper library is required for audio/video transcription.")
     return _whisper_model
 
 def transcribe_with_whisper(file_path):
@@ -48,7 +47,9 @@ def transcribe_with_whisper(file_path):
         
         full_text = []
         for segment in segments:
-            full_text.append(segment.text)
+            # Lưu vết thời gian (giây) vào đầu mỗi câu
+            formatted_text = f"[t={int(segment.start)}s] {segment.text}"
+            full_text.append(formatted_text)
             
         print(f"✅ Transcription completed. Extracted {sum(len(t) for t in full_text)} characters.")
         

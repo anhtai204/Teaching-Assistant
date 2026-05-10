@@ -9,10 +9,8 @@ from src.rag.embedding import get_embedding
 embedding_model = get_embedding()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if os.environ.get("VERCEL"):
-    MEMORY_DB_PATH = "/tmp/memory_db"
-else:
-    MEMORY_DB_PATH = str(PROJECT_ROOT / "memory_db")
+# Force local project directory for memory storage
+MEMORY_DB_PATH = str(PROJECT_ROOT / "memory_db")
 
 CONVERSATION_PATH = Path(MEMORY_DB_PATH) / "conversation_history.jsonl"
 SUMMARY_PATH = Path(MEMORY_DB_PATH) / "session_summaries.json"
@@ -43,10 +41,12 @@ def add_memory(
     source: str = "user",
     confidence: float = 0.8,
     tags: Optional[List[str]] = None,
+    session_id: str = "global",
 ):
     embedding = get_emb(text)
     metadata = {
         "user_id": user_id,
+        "session_id": session_id,
         "memory_type": memory_type,
         "source": source,
         "confidence": float(confidence),
@@ -67,13 +67,30 @@ def query_memory(
     query: str,
     top_k: int = 5,
     max_distance: Optional[float] = None,
+    memory_types: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
 ) -> List[str]:
     q_emb = get_emb(query)
+
+    # Xây dựng danh sách các điều kiện lọc
+    conditions = [{"user_id": user_id}]
+    
+    if memory_types:
+        if len(memory_types) == 1:
+            conditions.append({"memory_type": memory_types[0]})
+        else:
+            conditions.append({"$or": [{"memory_type": mt} for mt in memory_types]})
+    
+    if session_id and session_id != "global":
+        conditions.append({"session_id": session_id})
+
+    # Nếu có nhiều hơn 1 điều kiện, dùng $and. Nếu chỉ có 1, dùng chính điều kiện đó.
+    where_clause = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
     res = memory_col.query(
         query_embeddings=[q_emb],
         n_results=top_k,
-        where={"user_id": user_id},
+        where=where_clause,
         include=["documents", "distances", "metadatas"],
     )
 
@@ -97,13 +114,29 @@ def query_memory_records(
     query: str,
     top_k: int = 5,
     max_distance: Optional[float] = None,
+    memory_types: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     q_emb = get_emb(query)
+
+    # Xây dựng danh sách các điều kiện lọc
+    conditions = [{"user_id": user_id}]
+    
+    if memory_types:
+        if len(memory_types) == 1:
+            conditions.append({"memory_type": memory_types[0]})
+        else:
+            conditions.append({"$or": [{"memory_type": mt} for mt in memory_types]})
+            
+    if session_id and session_id != "global":
+        conditions.append({"session_id": session_id})
+
+    where_clause = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
     res = memory_col.query(
         query_embeddings=[q_emb],
         n_results=top_k,
-        where={"user_id": user_id},
+        where=where_clause,
         include=["documents", "distances", "metadatas"],
     )
 
@@ -185,7 +218,7 @@ def append_conversation_turn(
         pass # Best effort logging
 
 
-def load_recent_conversation(user_id: str, max_turns: int = 3) -> List[Dict[str, str]]:
+def load_recent_conversation(user_id: str, max_turns: int = 3, session_id: str = "default") -> List[Dict[str, str]]:
     if max_turns <= 0:
         return []
 
@@ -204,6 +237,11 @@ def load_recent_conversation(user_id: str, max_turns: int = 3) -> List[Dict[str,
                 continue
 
             if item.get("user_id") != user_id:
+                continue
+            
+            # Filter by session_id if it's not the default global one
+            item_sid = str(item.get("session_id") or "default")
+            if session_id != "default" and item_sid != str(session_id):
                 continue
 
             turns.append(item)

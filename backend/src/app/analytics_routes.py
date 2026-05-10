@@ -68,3 +68,102 @@ async def get_knowledge_gaps(course_id: str, db: Session = Depends(get_db)):
         }
         for gap in gaps
     ]
+
+@router.post("/analyze")
+async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
+    """
+    Triggers the LLM to analyze unresolved questions and negative feedback to extract knowledge gaps.
+    """
+    from src.analytics.analytics_service import generate_knowledge_gaps_with_llm
+    
+    # 1. Fetch unresolved/negative feedback chats
+    unresolved_msgs = (
+        db.query(ChatMessage)
+        .join(ChatSession)
+        .filter(ChatSession.course_id == course_id)
+        .filter((ChatMessage.is_flagged == True) | (ChatMessage.was_unanswered == True) | (ChatMessage.feedback_rating == -1))
+        .limit(50)
+        .all()
+    )
+    
+    if not unresolved_msgs:
+        return {"message": "No unresolved chats to analyze", "gaps_found": 0}
+        
+    # Format for LLM
+    history_data = []
+    for msg in unresolved_msgs:
+        # Get the preceding user message if this is an assistant message
+        user_msg_content = "Unknown"
+        if msg.role == "assistant":
+            user_msg = db.query(ChatMessage).filter(
+                ChatMessage.session_id == msg.session_id,
+                ChatMessage.role == "user",
+                ChatMessage.created_at < msg.created_at
+            ).order_by(ChatMessage.created_at.desc()).first()
+            if user_msg:
+                user_msg_content = user_msg.content
+                
+        history_data.append({
+            "user_msg": user_msg_content if msg.role == "assistant" else msg.content,
+            "ai_msg": msg.content if msg.role == "assistant" else "N/A",
+            "feedback": f"Flagged: {msg.is_flagged}, Rating: {msg.feedback_rating}, Unanswered: {msg.was_unanswered}"
+        })
+        
+    # 2. Call LLM
+    new_gaps = generate_knowledge_gaps_with_llm(history_data)
+    
+    # 3. Save to DB
+    saved_count = 0
+    if new_gaps:
+        # Optional: Clear old gaps for this course to keep it fresh
+        db.query(KnowledgeGap).filter(KnowledgeGap.course_id == course_id).delete()
+        
+        for gap_data in new_gaps:
+            new_gap = KnowledgeGap(
+                course_id=course_id,
+                topic=gap_data.get("topic", "Unknown"),
+                frequency=gap_data.get("frequency", 1),
+                gap_score=gap_data.get("gap_score", 5.0)
+            )
+            db.add(new_gap)
+            saved_count += 1
+            
+        db.commit()
+        
+    return {"message": "Analysis complete", "gaps_found": saved_count}
+
+@router.get("/roadmap")
+async def get_class_roadmap_progress(course_id: str, db: Session = Depends(get_db)):
+    """
+    Returns aggregated roadmap progress for all students in the class.
+    """
+    from src.models import RoadmapItem, course_enrollments, User
+    
+    # Get all students enrolled in the course
+    enrolled_student_ids = [
+        row[0] for row in db.query(course_enrollments.c.student_id)
+        .filter(course_enrollments.c.course_id == course_id)
+        .all()
+    ]
+    
+    if not enrolled_student_ids:
+        return []
+        
+    # Get all roadmap items for these students
+    items = (
+        db.query(RoadmapItem.topic, func.avg(RoadmapItem.progress).label("avg_progress"), func.count(RoadmapItem.id).label("student_count"))
+        .filter(RoadmapItem.student_id.in_(enrolled_student_ids))
+        .group_by(RoadmapItem.topic)
+        .order_by(func.count(RoadmapItem.id).desc())
+        .limit(15)
+        .all()
+    )
+    
+    return [
+        {
+            "topic": item.topic,
+            "avg_progress": round(item.avg_progress, 1),
+            "student_count": item.student_count
+        }
+        for item in items
+    ]

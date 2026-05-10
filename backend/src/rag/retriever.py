@@ -42,7 +42,12 @@ def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SE
             # Score here is distance (0 is perfect match), we can convert to similarity if needed
             chunks.append({
                 "text": chunk.content,
-                "metadata": {**chunk.metadata_json, "source": doc.name},
+                "metadata": {
+                    **chunk.metadata_json, 
+                    "source": doc.name,
+                    "id": str(doc.id),
+                    "is_visible": doc.is_visible
+                },
                 "score": 1.0 
             })
 

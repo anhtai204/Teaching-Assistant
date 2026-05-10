@@ -7,12 +7,14 @@ Persists conversation turns and refreshes the session summary.
 
 import logging
 
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.config import (
     MEMORY_SUMMARY_MODEL,
     MEMORY_SUMMARY_TURNS,
     GOOGLE_API_KEY,
+    OPENAI_API_KEY,
 )
 from src.graph.state import AgentState
 from src.memory.memory_service import (
@@ -29,11 +31,21 @@ _summary_llm = None
 def _get_summary_llm():
     global _summary_llm
     if _summary_llm is None:
-        _summary_llm = ChatGoogleGenerativeAI(
+        # Primary (OpenAI)
+        primary = ChatOpenAI(
             model=MEMORY_SUMMARY_MODEL,
+            api_key=OPENAI_API_KEY,
+            temperature=0,
+            max_retries=1,
+            timeout=10,
+        )
+        # Fallback (Gemini)
+        fallback = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
             google_api_key=GOOGLE_API_KEY,
             temperature=0,
         )
+        _summary_llm = primary.with_fallbacks([fallback])
     return _summary_llm
 
 
@@ -65,7 +77,7 @@ def save_memory_node(state: AgentState) -> dict:
             break
 
     # 1. Save long-term facts
-    saved_count = save_memory(user_id, user_input)
+    saved_count = save_memory(user_id, user_input, session_id=session_id)
     logger.info("[MEMORY SAVE] saved %d items", saved_count)
 
     # 2. Save conversation turn

@@ -7,17 +7,30 @@ from __future__ import annotations
 import json
 from typing import Dict
 
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from src.config import DEFAULT_MODEL, OPENAI_API_KEY, GOOGLE_API_KEY
 
-from src.config import DEFAULT_MODEL, GOOGLE_API_KEY
-
-_router_llm = ChatGoogleGenerativeAI(
+# Khởi tạo Primary (OpenAI)
+_primary_llm = ChatOpenAI(
     model=DEFAULT_MODEL,
+    api_key=OPENAI_API_KEY,
+    temperature=0,
+    max_retries=1,
+    timeout=10,
+)
+
+# Khởi tạo Fallback (Gemini)
+_fallback_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
     google_api_key=GOOGLE_API_KEY,
     temperature=0,
 )
 
-_ACADEMIC_HINTS = (
+# Tạo chuỗi Fallback
+_router_llm = _primary_llm.with_fallbacks([_fallback_llm])
+
+_MATERIAL_TERMS = (
     "lecture",
     "course",
     "syllabus",
@@ -26,16 +39,46 @@ _ACADEMIC_HINTS = (
     "lesson",
     "definition",
     "slide",
+    "reference",
+    "citation",
     "bài giảng",
     "giáo trình",
     "chương",
+    "tài liệu",
+    "trích dẫn",
+    "môn học",
+    "học phần",
+    "kiến thức",
+)
+
+_LOOKUP_VERBS = (
+    "find",
+    "lookup",
+    "search",
+    "quote",
+    "cite",
+    "extract",
+    "show source",
+    "tra cứu",
+    "tìm",
+    "trích",
+)
+
+_SMALL_TALK_TERMS = (
+    "hello",
+    "hi",
+    "thanks",
+    "thank you",
+    "how are you",
+    "xin chào",
+    "cảm ơn",
 )
 
 _ROUTER_PROMPT = """You are a strict routing classifier for an Academic AI Teaching Assistant.
 
 Decide the route based on the question:
-- retrieval: Use this for ANY question related to course content, definitions, lecture details, syllabus, assignments, or any factual information that might be in the course documents. If in doubt, choose retrieval.
-- direct: Only use this for greetings (Hi, Hello), thanks, or very general small talk (How are you?).
+- direct: ONLY use this for explicit greetings (Hi, Hello, Xin chào) or expressions of gratitude (Thanks, Cảm ơn).
+- retrieval: Use this for EVERYTHING ELSE. Any question about science, facts, physics, logic, life, course content, definitions, or any inquiries. If it is a question, it MUST be 'retrieval'.
 
 Your goal is to force the system to look at the database whenever possible to avoid making things up.
 
@@ -43,14 +86,28 @@ Return STRICT JSON only:
 {"route":"retrieval|direct","reason":"short reason"}
 """
 
+def _retrieval_signal_score(question: str) -> int:
+    q = (question or "").lower().strip()
+    score = 0
+    if any(term in q for term in _MATERIAL_TERMS):
+        score += 2
+    if any(verb in q for verb in _LOOKUP_VERBS):
+        score += 2
+    if "?" in q and len(q.split()) >= 8:
+        score += 1
+    return score
 
 def _heuristic_route(question: str) -> Dict[str, str]:
-    q = (question or "").lower()
-    needs_retrieval = any(h in q for h in _ACADEMIC_HINTS)
-    return {
-        "route": "retrieval" if needs_retrieval else "direct",
-        "reason": "Heuristic fallback: academic hint matched" if needs_retrieval else "Heuristic fallback: general conversation",
-    }
+    q = (question or "").lower().strip()
+    if not q:
+        return {"route": "direct", "reason": "Empty question"}
+    
+    score = _retrieval_signal_score(q)
+    if any(term in q for term in _SMALL_TALK_TERMS) and score < 2:
+        return {"route": "direct", "reason": "Small talk detected"}
+    
+    # Mặc định ưu tiên tìm kiếm tài liệu thay vì trả lời trực tiếp từ trí nhớ
+    return {"route": "retrieval", "reason": "Default to retrieval for academic safety"}
 
 
 def route_question(question: str) -> Dict[str, str]:
@@ -67,6 +124,16 @@ def route_question(question: str) -> Dict[str, str]:
             ]
         )
         raw = (resp.content or "").strip()
+        
+        # Strip markdown formatting if present
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        elif raw.startswith("```"):
+            raw = raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        raw = raw.strip()
+
         data = json.loads(raw)
 
         route = data.get("route", "")
@@ -77,6 +144,7 @@ def route_question(question: str) -> Dict[str, str]:
 
         return {"route": route, "reason": str(reason)}
 
-    except Exception:
+    except Exception as e:
+        print(f"[ROUTER ERROR] Failed to parse LLM route: {e}")
         # Safe fallback to avoid crashing the graph.
         return _heuristic_route(user_q)

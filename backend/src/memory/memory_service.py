@@ -14,17 +14,64 @@ DEFAULT_FACT_TOP_K = 5
 DEFAULT_FACT_MAX_DISTANCE = 1.1
 
 
+def load_short_term_memory(user_id: str, session_id: str, max_turns: int = 8):
+    return load_recent_conversation(user_id, max_turns=max_turns, session_id=session_id)
+
+
+def load_long_term_memory(user_id: str, query: str, top_k: int = 4, max_distance: float = DEFAULT_FACT_MAX_DISTANCE):
+    return query_memory(
+        user_id,
+        query,
+        top_k=top_k,
+        max_distance=max_distance,
+        memory_types=["long_term"],
+        session_id="global",
+    )
+
+
+def load_semantic_memory(user_id: str, query: str, top_k: int = 5, max_distance: float = DEFAULT_FACT_MAX_DISTANCE):
+    return query_memory(
+        user_id,
+        query,
+        top_k=top_k,
+        max_distance=max_distance,
+        memory_types=["semantic"],
+        session_id="global",
+    )
+
+
+def load_episodic_memory(user_id: str, query: str, session_id: str, top_k: int = 3, max_distance: float = DEFAULT_FACT_MAX_DISTANCE):
+    return query_memory(
+        user_id,
+        query,
+        top_k=top_k,
+        max_distance=max_distance,
+        memory_types=["episodic"],
+        session_id=session_id,
+    )
+
+
 def load_memory(
     user_id: str,
     query: str,
     top_k: int = DEFAULT_FACT_TOP_K,
     max_distance: float = DEFAULT_FACT_MAX_DISTANCE,
 ):
-    return query_memory(user_id, query, top_k=top_k, max_distance=max_distance)
+    semantic = load_semantic_memory(user_id, query, top_k=max(1, top_k // 2), max_distance=max_distance)
+    long_term = load_long_term_memory(user_id, query, top_k=max(1, top_k - len(semantic)), max_distance=max_distance)
+    merged = []
+    seen = set()
+    for item in semantic + long_term:
+        key = item.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+    return merged[:top_k]
 
 
-def load_context_messages(user_id: str, max_turns: int = 3):
-    return load_recent_conversation(user_id, max_turns=max_turns)
+def load_context_messages(user_id: str, max_turns: int = 8, session_id: str = "default"):
+    return load_short_term_memory(user_id, session_id=session_id, max_turns=max_turns)
 
 
 def load_session_context_summary(user_id: str):
@@ -45,7 +92,7 @@ def debug_memory_recall(
     )
 
 
-def save_memory(user_id: str, text: str):
+def save_memory(user_id: str, text: str, session_id: str = "default"):
     text_l = text.lower()
 
     # Explicit intents that indicate users want long-term memory.
@@ -63,6 +110,8 @@ def save_memory(user_id: str, text: str):
         "my preference",
         "my name is",
         "i am",
+        "my goal",
+        "my weakness",
     ]
 
     extracted = extract_memory(text)
@@ -76,9 +125,7 @@ def save_memory(user_id: str, text: str):
     seen = set()
     for c in candidates:
         c_norm = c.strip()
-        if not c_norm:
-            continue
-        if c_norm in seen:
+        if not c_norm or c_norm in seen:
             continue
         seen.add(c_norm)
         unique_candidates.append(c_norm)
@@ -87,10 +134,22 @@ def save_memory(user_id: str, text: str):
         add_memory(
             user_id,
             memory,
-            memory_type="fact",
+            memory_type="semantic",
             source="user",
             confidence=0.9,
             tags=["preference", "profile"],
+            session_id="global",
+        )
+
+    if unique_candidates:
+        add_memory(
+            user_id,
+            " | ".join(unique_candidates[:3]),
+            memory_type="episodic",
+            source="session",
+            confidence=0.75,
+            tags=["episode", "session"],
+            session_id=session_id,
         )
 
     return len(unique_candidates)

@@ -30,18 +30,28 @@ export default function CourseManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"settings" | "students" | "analytics">("settings");
+  const [overview, setOverview] = useState<any>(null);
+  const [knowledgeGaps, setKnowledgeGaps] = useState<any[]>([]);
+  const [roadmapProgress, setRoadmapProgress] = useState<any[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<any[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   useEffect(() => {
     if (id) {
       fetchData();
+      if (activeTab === "analytics") {
+        fetchAnalytics();
+      }
     }
-  }, [id]);
+  }, [id, activeTab]);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
-      // Fetch course details (from list for now since no single get endpoint yet)
+      // Fetch course details
       const courseRes = await fetch(`${baseUrl}/api/courses`);
       if (courseRes.ok) {
         const allCourses = await courseRes.json();
@@ -62,6 +72,45 @@ export default function CourseManagement() {
       console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      
+      const [overviewRes, gapsRes, roadmapRes, pendingRes] = await Promise.all([
+        fetch(`${baseUrl}/api/analytics/overview?course_id=${id}`),
+        fetch(`${baseUrl}/api/analytics/knowledge-gaps?course_id=${id}`),
+        fetch(`${baseUrl}/api/analytics/roadmap?course_id=${id}`),
+        fetch(`${baseUrl}/api/moderation/pending?course_id=${id}`)
+      ]);
+
+      if (overviewRes.ok) setOverview(await overviewRes.json());
+      if (gapsRes.ok) setKnowledgeGaps(await gapsRes.json());
+      if (roadmapRes.ok) setRoadmapProgress(await roadmapRes.json());
+      if (pendingRes.ok) setPendingQuestions(await pendingRes.json());
+    } catch (error) {
+      console.error("Failed to fetch analytics:", error);
+    }
+  };
+
+  const handleAnalyzeInsights = async () => {
+    setIsAnalyzing(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${baseUrl}/api/analytics/analyze?course_id=${id}`, {
+        method: "POST"
+      });
+      if (response.ok) {
+        const result = await response.json();
+        alert(`Analysis complete! Found ${result.gaps_found} new knowledge gaps.`);
+        fetchAnalytics(); // Refresh data
+      }
+    } catch (error) {
+      console.error("Failed to analyze insights:", error);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -102,7 +151,7 @@ export default function CourseManagement() {
     }
   };
 
-  if (isLoading) return <div className="p-20 text-center">Loading...</div>;
+  if (isLoading && !course) return <div className="p-20 text-center">Loading...</div>;
   if (!course) return <div className="p-20 text-center text-red-500">Course not found</div>;
 
   return (
@@ -121,99 +170,304 @@ export default function CourseManagement() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Settings */}
-        <div className="lg:col-span-1 space-y-8">
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">General Info</h2>
-            <Card className="p-6 space-y-4">
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Enrollment Code</p>
-                <div className="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
-                  <span className="text-2xl font-mono font-bold text-brand-600 tracking-wider">{course.enrollment_code}</span>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    navigator.clipboard.writeText(course.enrollment_code);
-                    alert("Code copied!");
-                  }}>
-                    Copy
+      {/* Tabs Navigation */}
+      <div className="bg-white dark:bg-[#0F0F23] border-b border-slate-200 dark:border-white/5 px-6">
+        <div className="max-w-7xl mx-auto flex gap-8">
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === "settings" ? "border-brand-500 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+          >
+            Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("students")}
+            className={`py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === "students" ? "border-brand-500 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+          >
+            Students ({students.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === "analytics" ? "border-brand-500 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+          >
+            Analytics & Insights
+          </button>
+        </div>
+      </div>
+
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        {activeTab === "settings" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold text-slate-900">General Info</h2>
+              <Card className="p-6 space-y-4">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Enrollment Code</p>
+                  <div className="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
+                    <span className="text-2xl font-mono font-bold text-brand-600 tracking-wider">{course.enrollment_code}</span>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      navigator.clipboard.writeText(course.enrollment_code);
+                      alert("Code copied!");
+                    }}>
+                      Copy
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-2">Share this code with your students so they can join the class.</p>
+                </div>
+              </Card>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold text-slate-900">AI Assistant Greeting</h2>
+              <Card className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">First Message</label>
+                  <textarea 
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-all focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                    rows={4}
+                    placeholder="e.g. Chào em, thầy là bot trợ giảng môn Trí tuệ nhân tạo..."
+                    value={greeting}
+                    onChange={(e) => setGreeting(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleSaveSettings} className="w-full" isLoading={isSaving}>
+                  Save Greeting
+                </Button>
+              </Card>
+            </section>
+          </div>
+        )}
+
+        {activeTab === "students" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-900">Enrolled Students ({students.length})</h2>
+            </div>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Student Name</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Email</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {students.map((student) => (
+                      <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-xs">
+                              {student.full_name.charAt(0)}
+                            </div>
+                            <span className="font-medium text-slate-900">{student.full_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 text-sm">{student.email}</td>
+                        <td className="px-6 py-4 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-500 hover:bg-red-50"
+                            onClick={() => handleRemoveStudent(student.id)}
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {students.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-10 text-center text-slate-500">
+                          No students enrolled yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === "analytics" && (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card className="p-6 border-l-4 border-l-blue-500">
+                <h3 className="text-sm font-bold text-slate-500 uppercase">Total Chats</h3>
+                <p className="text-4xl font-black text-slate-900 mt-2">{overview?.total_chats || 0}</p>
+              </Card>
+              <Card className="p-6 border-l-4 border-l-brand-500">
+                <h3 className="text-sm font-bold text-slate-500 uppercase">Questions Answered</h3>
+                <p className="text-4xl font-black text-slate-900 mt-2">{overview?.total_questions || 0}</p>
+              </Card>
+              <Card className="p-6 border-l-4 border-l-green-500">
+                <h3 className="text-sm font-bold text-slate-500 uppercase">Resolution Rate</h3>
+                <p className="text-4xl font-black text-slate-900 mt-2">{overview?.resolution_rate || 0}%</p>
+              </Card>
+              <Card className="p-6 border-l-4 border-l-purple-500">
+                <h3 className="text-sm font-bold text-slate-500 uppercase">Hours Saved</h3>
+                <p className="text-4xl font-black text-slate-900 mt-2">{overview?.hours_saved || 0}h</p>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Knowledge Gaps */}
+              <section className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Knowledge Gaps</h2>
+                    <p className="text-sm text-slate-500 font-medium">Topics students struggle with most, identified by AI.</p>
+                  </div>
+                  <Button size="sm" onClick={handleAnalyzeInsights} isLoading={isAnalyzing} className="shadow-md">
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Generate Insights
                   </Button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-2">Share this code with your students so they can join the class.</p>
-              </div>
-            </Card>
-          </section>
+                
+                <Card className="overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Struggling Topic</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Frequency</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Severity</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {knowledgeGaps.map((gap, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-slate-800">{gap.topic}</td>
+                          <td className="px-6 py-4 text-right font-medium text-slate-600">{gap.frequency}</td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold ${gap.gap_score >= 8 ? 'bg-red-100 text-red-700' : gap.gap_score >= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                              {gap.gap_score}/10
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {knowledgeGaps.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-12 text-center">
+                            <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <p className="text-slate-500 font-medium">No knowledge gaps detected.</p>
+                            <p className="text-sm text-slate-400 mt-1">Click "Generate Insights" to let AI analyze recent chats.</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+              </section>
 
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">AI Assistant Greeting</h2>
-            <Card className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700">First Message</label>
-                <textarea 
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-all focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
-                  rows={4}
-                  placeholder="e.g. Chào em, thầy là bot trợ giảng môn Trí tuệ nhân tạo..."
-                  value={greeting}
-                  onChange={(e) => setGreeting(e.target.value)}
-                />
-              </div>
-              <Button onClick={handleSaveSettings} className="w-full" isLoading={isSaving}>
-                Save Greeting
-              </Button>
-            </Card>
-          </section>
-        </div>
-
-        {/* Right Column: Student List */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-900">Enrolled Students ({students.length})</h2>
-          </div>
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Student Name</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Email</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {students.map((student) => (
-                    <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-xs">
-                            {student.full_name.charAt(0)}
-                          </div>
-                          <span className="font-medium text-slate-900">{student.full_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 text-sm">{student.email}</td>
-                      <td className="px-6 py-4 text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-red-500 hover:bg-red-50"
-                          onClick={() => handleRemoveStudent(student.id)}
-                        >
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {students.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="px-6 py-10 text-center text-slate-500">
-                        No students enrolled yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              {/* Class Roadmap Progress */}
+              <section className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Class Roadmap Progress</h2>
+                    <p className="text-sm text-slate-500 font-medium">Aggregated progress across all enrolled students.</p>
+                  </div>
+                </div>
+                
+                <Card className="overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Learning Topic</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Students</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right w-1/3">Avg. Progress</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {roadmapProgress.map((item, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-slate-800 truncate max-w-[200px]" title={item.topic}>{item.topic}</td>
+                          <td className="px-6 py-4 text-right font-medium text-slate-600">{item.student_count}</td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center gap-3 justify-end">
+                              <div className="w-full bg-slate-100 rounded-full h-2">
+                                <div className="bg-brand-500 h-2 rounded-full" style={{ width: `${item.avg_progress}%` }}></div>
+                              </div>
+                              <span className="text-xs font-bold text-slate-500 w-8">{item.avg_progress}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {roadmapProgress.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">
+                            No roadmap data available yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+              </section>
             </div>
-          </Card>
-        </div>
+
+            {/* Flagged & Unresolved Questions (Raw Data) */}
+            <section className="space-y-4 pt-4">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Pending Moderation</h2>
+                  <p className="text-sm text-slate-500 font-medium">Raw list of questions students rated as 'Bad' or explicitly reported.</p>
+                </div>
+                {pendingQuestions.length > 0 && (
+                  <Link href={`/lecturer/moderation?course_id=${id}`}>
+                    <Button size="sm" variant="outline">
+                      Go to Moderation Dashboard &rarr;
+                    </Button>
+                  </Link>
+                )}
+              </div>
+              
+              <Card className="overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Student Question</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase w-1/2">AI Response</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {pendingQuestions.slice(0, 5).map((msg, i) => (
+                      <tr key={msg.id || i} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-800 text-sm">{msg.student_question || "Unknown Question"}</div>
+                          <div className="mt-2 flex gap-2">
+                            <span className="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-50 text-red-600 border border-red-100">Negative Feedback</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          <div className="line-clamp-3">{msg.ai_answer || msg.content}</div>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs text-slate-500 whitespace-nowrap">
+                          {new Date(msg.flagged_at || msg.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                    {pendingQuestions.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">
+                          No pending questions. AI is performing well!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </Card>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

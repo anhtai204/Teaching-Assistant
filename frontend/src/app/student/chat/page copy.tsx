@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/FormElements";
 import { UserMenu } from "@/components/UserMenu";
-import { Send, Info, MessageSquare, History, ArrowLeft, Download, ExternalLink, Flag, ThumbsUp, ThumbsDown, Sparkles, X, FileText, CheckCircle2, PlusCircle, Clock, BookOpen, AlertTriangle } from "lucide-react";
+import { Send, Info, MessageSquare, History, ArrowLeft, Download, ExternalLink, Flag, ThumbsUp, ThumbsDown, Sparkles, X, FileText, CheckCircle2, PlusCircle, Clock, BookOpen } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -18,17 +18,6 @@ interface Message {
   sources?: string[];
   chunks?: any[];
   is_flagged?: boolean;
-  feedback_rating?: number;
-  manual_answer?: string;
-}
-
-interface RoadmapItem {
-  id: string;
-  topic: string;
-  description: string;
-  status: string;
-  priority: "High" | "Medium" | "Low";
-  progress: number;
 }
 
 interface ChatSessionInfo {
@@ -49,51 +38,11 @@ function ChatContent() {
   const [chatSessions, setChatSessions] = useState<ChatSessionInfo[]>([]);
   const [course, setCourse] = useState<any>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [roadmapItems, setRoadmapItems] = useState<RoadmapItem[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [previewSource, setPreviewSource] = useState<any>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const fetchRoadmap = async () => {
-    try {
-      const studentId = (session?.user as any)?.id || "default";
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRoadmapItems(data.items || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch roadmap:", error);
-    }
-  };
-
-  const handleUpdateProgress = async (itemId: string, newProgress: number) => {
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/roadmap/${itemId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ progress: newProgress })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRoadmapItems(prev => prev.map(item => 
-          item.id === itemId ? { ...item, progress: data.progress, status: data.status } : item
-        ));
-      }
-    } catch (error) {
-      console.error("Failed to update progress:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (session?.user) {
-      fetchRoadmap();
-    }
-  }, [session, messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -110,28 +59,22 @@ function ChatContent() {
     }
   }, [courseId, session]);
 
-  const isAutoSelectDone = useRef(false);
-
   useEffect(() => {
-    // If we have sessions but no current session selected, auto-select the latest one ONLY on initial load
-    if (chatSessions.length > 0 && !currentSessionId && !initialSessionId && !isAutoSelectDone.current) {
+    // If we have sessions but no current session selected, auto-select the latest one
+    if (chatSessions.length > 0 && !currentSessionId && !initialSessionId) {
       setCurrentSessionId(chatSessions[0].id);
-      isAutoSelectDone.current = true;
     }
   }, [chatSessions, currentSessionId, initialSessionId]);
 
   useEffect(() => {
     if (currentSessionId) {
-      // Chỉ fetch lại nếu KHÔNG ĐANG TRONG QUÁ TRÌNH STREAM
-      // Nhưng nếu đổi session_id khác, chúng ta phải hủy stream cũ và fetch mới.
-      setIsLoading(false);
+      setIsLoading(false); // Reset loading state when switching sessions
       fetchSessionMessages(currentSessionId);
     } else if (course) {
       const greeting = course.greeting_message || `Hello ${session?.user?.name || "Student"}! I'm your AI Teaching Assistant for **${course.name}**. How can I help you today?`;
       setMessages([{ role: "assistant", content: greeting }]);
     }
-    // Sử dụng course?.id và session?.user?.name thay vì toàn bộ object để tránh re-render khi NextAuth tự động refetch session (chuyển tab)
-  }, [currentSessionId, course?.id, session?.user?.name]);
+  }, [currentSessionId, course, session]);
 
   const fetchCourseDetails = async () => {
     try {
@@ -279,7 +222,7 @@ function ChatContent() {
     }
   };
 
-  const handleFeedback = async (messageId: string, rating: number | null, isReport = false) => {
+  const handleFeedback = async (messageId: string, rating: number, isReport = false) => {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       await fetch(`${baseUrl}/api/chat/messages/${messageId}/feedback`, {
@@ -288,14 +231,7 @@ function ChatContent() {
         body: JSON.stringify({ rating, is_report: isReport }),
       });
 
-      setMessages(prev => prev.map(m => {
-        if (m.id !== messageId) return m;
-        return {
-          ...m,
-          ...(rating !== null ? { feedback_rating: rating } : {}),
-          is_flagged: isReport || m.is_flagged
-        };
-      }));
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_flagged: isReport } : m));
     } catch (error) {
       console.error("Feedback error:", error);
     }
@@ -303,52 +239,17 @@ function ChatContent() {
 
   const renderContent = (content: string, role: "user" | "assistant") => {
     const isUser = role === "user";
-    
-    // Tin nhắn của sinh viên chỉ cần hiển thị văn bản thuần túy (Plain Text)
-    if (isUser) {
-      return <div className="whitespace-pre-wrap break-words text-white">{content}</div>;
-    }
-
-    // Tin nhắn của AI sẽ được render bằng Markdown
     return (
-      <div className="prose max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:p-0 prose-pre:rounded-2xl prose-slate dark:prose-invert prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-table:border prose-table:border-slate-100 prose-th:bg-slate-50 prose-th:p-4 prose-td:p-4">
-        <ReactMarkdown 
+      <div className={`prose max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:p-4 prose-pre:rounded-xl ${isUser
+        ? "prose-invert text-white prose-p:text-white prose-headings:text-white prose-strong:text-white"
+        : "prose-slate dark:prose-invert prose-code:text-blue-600 dark:prose-code:text-blue-400"
+        }`}>
+        <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            code({node, className, children, ...props}) {
-
-              const match = /language-(\w+)/.exec(className || '');
-              const isBlock = !!match;
-              return isBlock ? (
-                <div className="relative group/code my-6">
-                  <div className="absolute right-4 top-4 z-20">
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(String(children).replace(/\n$/, ''));
-                      }}
-                      className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-xl text-white opacity-0 group-hover/code:opacity-100 transition-all shadow-lg border border-white/10"
-                      title="Copy code"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto p-6 rounded-2xl bg-slate-900 shadow-inner ring-1 ring-white/10">
-                    <code className={`${className} text-sm leading-relaxed`} {...props}>
-                      {children}
-                    </code>
-                  </div>
-                </div>
-              ) : (
-                <code className="bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded-md font-bold text-blue-600 dark:text-blue-400" {...props}>
-                  {children}
-                </code>
-              )
-            },
             a: ({ node, ...props }) => {
               const isCitation = props.href?.includes('/student/materials/viewer/');
-              // Hậu kiểm: Nếu là link trích dẫn, mặc định là hiện trừ khi có visible=false
-              const isExplicitlyHidden = props.href?.toLowerCase().includes('visible=false');
-              const isVisible = isCitation && !isExplicitlyHidden;
+              const isVisible = props.href?.includes('visible=true');
 
               if (isCitation) {
                 if (isVisible) {
@@ -416,7 +317,6 @@ function ChatContent() {
             variant="outline"
             className="w-full justify-center gap-2 border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1A3A] hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-500/10 transition-all py-6 rounded-2xl shadow-sm dark:text-white"
             onClick={() => {
-              isAutoSelectDone.current = true; // Ngăn không cho auto-select lại phiên cũ
               setCurrentSessionId(null);
               const greeting = course?.greeting_message || `Hello ${session?.user?.name || "Student"}! I'm your AI Teaching Assistant for **${course?.name || "this course"}**. How can I help you today?`;
               setMessages([{ role: "assistant", content: greeting }]);
@@ -426,7 +326,7 @@ function ChatContent() {
             New Discussion
           </Button>
 
-          <div className="space-y-4">
+          <div className="space-y-2">
             <h3 className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <History className="w-3 h-3" />
               Chat History
@@ -449,71 +349,6 @@ function ChatContent() {
                   )}
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* New Roadmap Section */}
-          <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
-            <div className="flex items-center justify-between px-3">
-              <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles className="w-3 h-3" />
-                Learning Focus
-              </h3>
-              <button 
-                onClick={async () => {
-                  try {
-                    const studentId = (session?.user as any)?.id || "default";
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                    const res = await fetch(`${baseUrl}/api/roadmap/refresh?user_id=${studentId}`, { method: 'POST' });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setRoadmapItems(data.items || []);
-                    }
-                  } catch (e) {
-                    console.error("Refresh failed", e);
-                  }
-                }}
-                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-              >
-                Refresh
-              </button>
-            </div>
-            <div className="space-y-3">
-              {roadmapItems.map((item, idx) => (
-                <div key={item.id || idx} className={`p-4 bg-white dark:bg-[#1A1A3A] rounded-2xl border ${item.status === 'done' ? 'border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10' : 'border-slate-50 dark:border-white/5'} shadow-sm transition-all`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className={`text-xs font-bold truncate max-w-[140px] ${item.status === 'done' ? 'text-green-700 dark:text-green-400 line-through opacity-70' : 'text-slate-700 dark:text-white'}`}>{item.topic}</p>
-                    {item.status !== 'done' && (
-                      <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">{item.priority}</span>
-                    )}
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${
-                        item.status === 'done' ? "bg-green-500" : item.priority === "High" ? "bg-red-500" : item.priority === "Medium" ? "bg-amber-500" : "bg-blue-500"
-                      }`}
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    {item.status !== 'done' ? (
-                      <button 
-                        onClick={() => handleUpdateProgress(item.id, 100)}
-                        className="text-[10px] flex items-center gap-1 font-bold text-slate-400 hover:text-green-600 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3 h-3" /> Mark as Done
-                      </button>
-                    ) : (
-                      <span className="text-[10px] flex items-center gap-1 font-bold text-green-600">
-                        <CheckCircle2 className="w-3 h-3" /> Completed
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {roadmapItems.length === 0 && (
-                <p className="px-4 text-[10px] text-slate-400 font-medium italic">Keep chatting or click Refresh to generate your personalized roadmap!</p>
-              )}
             </div>
           </div>
         </div>
@@ -556,28 +391,15 @@ function ChatContent() {
                   }`}>
                   {msg.role === "assistant" ? "AI" : (session?.user?.name?.substring(0, 2).toUpperCase() || "ME")}
                 </div>
-                <div className={`max-w-[85%] space-y-4 ${msg.role === "user" ? "text-left" : ""}`}>
-                  <div className={`p-7 rounded-[2rem] text-slate-800 dark:text-slate-200 leading-relaxed text-[16px] shadow-sm relative transition-all ${msg.role === "assistant"
-                    ? "bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/5 rounded-tl-lg font-medium"
+                <div className={`max-w-[85%] space-y-4 ${msg.role === "user" ? "text-right" : ""}`}>
+                  <div className={`p-7 rounded-[2rem] text-slate-800 leading-relaxed text-[16px] shadow-sm relative transition-all ${msg.role === "assistant"
+                    ? "bg-white border border-slate-100 rounded-tl-lg font-medium"
                     : "bg-blue-600 text-white rounded-tr-lg font-semibold shadow-blue-200"
                     }`}>
                     {msg.role === "assistant" && !msg.content && isLoading && i === messages.length - 1 ? (
                       <ThinkingDots />
                     ) : (
-                      <>
-                        {renderContent(msg.content || "", msg.role as "user" | "assistant")}
-                        {msg.manual_answer && (
-                          <div className="mt-6 pt-4 border-t border-amber-200 dark:border-amber-700/30">
-                            <div className="flex items-center gap-2 mb-3 text-amber-700 dark:text-amber-400 font-bold text-sm">
-                              <AlertTriangle className="h-4 w-4" />
-                              <span>Lecturer Correction</span>
-                            </div>
-                            <div className="text-slate-800 dark:text-slate-200">
-                              {renderContent(msg.manual_answer, "assistant")}
-                            </div>
-                          </div>
-                        )}
-                      </>
+                      renderContent(msg.content || "", msg.role as "user" | "assistant")
                     )}
                   </div>
 
@@ -586,21 +408,13 @@ function ChatContent() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => msg.id && handleFeedback(msg.id, 1)}
-                          className={`p-2 rounded-xl transition-all cursor-pointer ${msg.feedback_rating === 1 ? "text-blue-600 bg-blue-50 dark:bg-blue-900/30" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"}`}
-                          title="Good answer"
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
                         >
                           <ThumbsUp className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => msg.id && handleFeedback(msg.id, -1)}
-                          className={`p-2 rounded-xl transition-all cursor-pointer ${msg.feedback_rating === -1 && !msg.is_flagged ? "text-orange-500 bg-orange-50 dark:bg-orange-900/30" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"}`}
-                          title="Bad answer"
-                        >
-                          <ThumbsDown className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => msg.id && handleFeedback(msg.id, null, true)}
-                          className={`p-2 rounded-xl transition-all cursor-pointer ${msg.is_flagged ? "text-red-500 bg-red-50 dark:bg-red-900/30" : "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"}`}
+                          onClick={() => msg.id && handleFeedback(msg.id, -1, true)}
+                          className={`p-2 rounded-xl transition-all cursor-pointer ${msg.is_flagged ? "text-red-500 bg-red-50" : "text-slate-400 hover:text-red-500 hover:bg-red-50"}`}
                           title="Report inaccurate answer"
                         >
                           <Flag className="h-4 w-4" />

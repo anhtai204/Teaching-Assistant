@@ -26,21 +26,22 @@ interface MaterialViewerProps {
     url: string;
     course_name?: string;
   };
+  initialTimestamp?: number;
   onClose?: () => void;
 }
 
-export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, onClose }) => {
+export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, initialTimestamp, onClose }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const renderContent = () => {
     const type = material.type.toLowerCase();
     
     if (['mp4', 'mov', 'webm'].includes(type)) {
-      return <VideoViewer url={material.url} />;
+      return <VideoViewer url={material.url} initialTimestamp={initialTimestamp} />;
     }
     
     if (['mp3', 'wav', 'm4a'].includes(type)) {
-      return <AudioViewer url={material.url} name={material.name} />;
+      return <AudioViewer url={material.url} name={material.name} initialTimestamp={initialTimestamp} />;
     }
 
     if (type === 'md' || material.url.toLowerCase().endsWith('.md')) {
@@ -210,13 +211,30 @@ const MarkdownViewer: React.FC<{ url: string }> = ({ url }) => {
   );
 };
 
-const VideoViewer: React.FC<{ url: string }> = ({ url }) => {
+const VideoViewer: React.FC<{ url: string; initialTimestamp?: number }> = ({ url, initialTimestamp }) => {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && initialTimestamp !== undefined) {
+      videoRef.current.currentTime = initialTimestamp;
+    }
+  };
+
+  useEffect(() => {
+    // Fallback if metadata is already loaded when the effect runs
+    if (videoRef.current && initialTimestamp !== undefined && videoRef.current.readyState >= 1) {
+      videoRef.current.currentTime = initialTimestamp;
+    }
+  }, [initialTimestamp, url]);
+
   return (
     <div className="w-full h-full flex items-center justify-center bg-black">
       <video 
+        ref={videoRef}
         src={url} 
         controls 
         autoPlay
+        onLoadedMetadata={handleLoadedMetadata}
         className="w-full h-full object-contain"
       >
         Your browser does not support the video tag.
@@ -225,7 +243,21 @@ const VideoViewer: React.FC<{ url: string }> = ({ url }) => {
   );
 };
 
-const AudioViewer: React.FC<{ url: string, name: string }> = ({ url, name }) => {
+const AudioViewer: React.FC<{ url: string, name: string, initialTimestamp?: number }> = ({ url, name, initialTimestamp }) => {
+  const audioRef = React.useRef<HTMLAudioElement>(null);
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current && initialTimestamp !== undefined) {
+      audioRef.current.currentTime = initialTimestamp;
+    }
+  };
+
+  useEffect(() => {
+    if (audioRef.current && initialTimestamp !== undefined && audioRef.current.readyState >= 1) {
+      audioRef.current.currentTime = initialTimestamp;
+    }
+  }, [initialTimestamp, url]);
+
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-12 space-y-12">
       <div className="relative">
@@ -241,7 +273,7 @@ const AudioViewer: React.FC<{ url: string, name: string }> = ({ url, name }) => 
       </div>
 
       <div className="w-full max-w-2xl glass-dark p-8 rounded-3xl border border-white/10 spatial-shadow">
-        <audio src={url} controls className="w-full h-12" />
+        <audio ref={audioRef} src={url} controls autoPlay onLoadedMetadata={handleLoadedMetadata} className="w-full h-12" />
         <div className="mt-6 flex justify-between text-[10px] font-black text-white/40 uppercase tracking-widest">
           <span>Stereo Output</span>
           <span>Adaptive Bitrate</span>

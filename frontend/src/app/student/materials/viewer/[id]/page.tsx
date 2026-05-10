@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MaterialViewer } from "@/components/materials/MaterialViewer";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export default function MaterialViewerPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const t = searchParams.get("t");
   
   const [material, setMaterial] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +86,7 @@ export default function MaterialViewerPage() {
         url: material.url,
         course_name: material.course_name
       }} 
+      initialTimestamp={t ? parseInt(t, 10) : undefined}
       onClose={() => router.back()}
     />
   );

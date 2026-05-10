@@ -31,6 +31,7 @@ class AgentState(TypedDict):
         final_answer: Final answer text prepared by tutor/direct branch.
 """
 
+    user_profile: dict
     messages: Annotated[Sequence[BaseMessage], add_messages]
     user_id: str
     session_id: str
@@ -40,5 +41,5 @@ class AgentState(TypedDict):
     summary_block: str
     route: str
     route_reason: str
-    retrieved_chunks: List[dict]
+    context: List[dict]
     final_answer: str
