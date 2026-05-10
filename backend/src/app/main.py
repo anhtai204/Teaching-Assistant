@@ -31,6 +31,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "message": "AI Teaching Assistant API is running",
+        "version": "1.0.0"
+    }
+
 app.include_router(router)
 app.include_router(moderation_router)
 app.include_router(analytics_router)
