@@ -4,6 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message="The default value of `allowed_objects` will change")
+
 # Thêm thư mục gốc (backend) vào sys.path để các import 'src.xxx' hoạt động
 current_dir = os.path.dirname(os.path.abspath(__file__)) # backend/src/app
 backend_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
@@ -36,7 +40,7 @@ async def root():
     return {
         "status": "online",
         "message": "AI Teaching Assistant API is running",
-        "version": "1.0.0"
+        "version": "1.0.1"
     }
 
 app.include_router(router)

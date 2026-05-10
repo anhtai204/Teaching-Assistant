@@ -11,24 +11,36 @@ from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.config import DEFAULT_MODEL, OPENAI_API_KEY, GOOGLE_API_KEY
 
-# Khởi tạo Primary (OpenAI)
-_primary_llm = ChatOpenAI(
-    model=DEFAULT_MODEL,
-    api_key=OPENAI_API_KEY,
-    temperature=0,
-    max_retries=1,
-    timeout=10,
-)
+def get_router_llm(timeout=30):
+    """Factory for router LLM."""
+    model_name = DEFAULT_MODEL.lower()
+    
+    if "gpt" in model_name:
+        return ChatOpenAI(
+            model=DEFAULT_MODEL,
+            api_key=OPENAI_API_KEY,
+            temperature=0,
+            max_retries=2,
+            timeout=timeout
+        )
+    elif "gemini" in model_name:
+        return ChatGoogleGenerativeAI(
+            model=DEFAULT_MODEL,
+            google_api_key=GOOGLE_API_KEY,
+            temperature=0,
+            timeout=timeout
+        )
+    else:
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=OPENAI_API_KEY,
+            temperature=0,
+            timeout=timeout
+        )
 
-# Khởi tạo Fallback (Gemini)
-_fallback_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=GOOGLE_API_KEY,
-    temperature=0,
-)
-
-# Tạo chuỗi Fallback
-_router_llm = _primary_llm.with_fallbacks([_fallback_llm])
+_router_llm = get_router_llm().with_fallbacks([
+    ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+])
 
 _MATERIAL_TERMS = (
     "lecture",

@@ -208,6 +208,12 @@ RERANK_MODEL = None
 
 def get_rerank_model():
     global RERANK_MODEL
+    
+    # DISABLE Rerank on Render/Cloud to save RAM (512MB limit)
+    if os.getenv("RENDER") or os.getenv("VERCEL"):
+        print("Cloud environment detected. Disabling CrossEncoder Rerank to save RAM.")
+        return None
+
     if RERANK_MODEL is None:
         try:
             from sentence_transformers import CrossEncoder

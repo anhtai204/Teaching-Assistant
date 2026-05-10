@@ -12,23 +12,38 @@ from src.graph.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-# Primary (OpenAI)
-_primary_llm = ChatOpenAI(
-    model=DEFAULT_MODEL, 
-    api_key=OPENAI_API_KEY, 
-    temperature=0.1,  # Đã giảm xuống 0.1 để chống ảo giác
-    max_retries=1,
-    timeout=15        # Timeout sau 15 giây
-)
+def get_llm(temperature=0.1, timeout=30):
+    """Factory to get the correct LLM based on DEFAULT_MODEL."""
+    model_name = DEFAULT_MODEL.lower()
+    
+    if "gpt" in model_name:
+        return ChatOpenAI(
+            model=DEFAULT_MODEL,
+            api_key=OPENAI_API_KEY,
+            temperature=temperature,
+            max_retries=2,
+            timeout=timeout
+        )
+    elif "gemini" in model_name:
+        return ChatGoogleGenerativeAI(
+            model=DEFAULT_MODEL,
+            google_api_key=GOOGLE_API_KEY,
+            temperature=temperature,
+            timeout=timeout
+        )
+    else:
+        # Fallback to OpenAI if unknown
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=OPENAI_API_KEY,
+            temperature=temperature,
+            timeout=timeout
+        )
 
-# Fallback (Gemini)
-_fallback_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", 
-    google_api_key=GOOGLE_API_KEY, 
-    temperature=0.3
-)
-
-_llm = _primary_llm.with_fallbacks([_fallback_llm])
+# Base LLM with fallback
+_llm = get_llm().with_fallbacks([
+    ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+])
 
 
 import re
@@ -71,13 +86,9 @@ def tutor_node(state: AgentState) -> dict:
     rebuilt_messages = list(base_messages)
     
     # Use lower temperature for academic grounding
-    _strict_llm = ChatOpenAI(
-        model=DEFAULT_MODEL, 
-        api_key=OPENAI_API_KEY, 
-        temperature=0.1,
-        max_retries=1,
-        timeout=10
-    ).with_fallbacks([_fallback_llm])
+    _strict_llm = get_llm(temperature=0.1, timeout=30).with_fallbacks([
+        ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+    ])
 
     if context_text:
         from langchain_core.messages import SystemMessage
