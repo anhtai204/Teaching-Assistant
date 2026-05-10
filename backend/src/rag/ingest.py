@@ -22,9 +22,9 @@ def get_whisper_model():
     if _whisper_model is None:
         try:
             from faster_whisper import WhisperModel
-            print("Loading Faster-Whisper model (small) with INT8 quantization for efficiency...")
-            # 'small' is great for Vietnamese. int8 makes it very light on RAM.
-            _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+            print("Loading Faster-Whisper model (base) with INT8 quantization for efficiency...")
+            # 'base' is suitable for 512MB RAM limit. int8 makes it even lighter.
+            _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
         except ImportError:
             print("❌ Error: 'faster-whisper' library not found. Please install it with 'pip install faster-whisper' to process audio/video files.")
             raise ImportError("faster-whisper library is required for audio/video transcription.")
