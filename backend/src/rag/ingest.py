@@ -33,11 +33,11 @@ def transcribe_with_whisper(file_path):
             )
             
         full_text = []
-        if hasattr(transcript, 'segments'):
+        if hasattr(transcript, 'segments') and transcript.segments:
             for segment in transcript.segments:
-                # Format: [t=10s] Nội dung...
-                timestamp_prefix = f"[t={int(segment['start'])}s]"
-                full_text.append(f"{timestamp_prefix} {segment['text'].strip()}")
+                # Use attribute access (.start, .text) for Pydantic models in OpenAI SDK v1
+                timestamp_prefix = f"[t={int(segment.start)}s]"
+                full_text.append(f"{timestamp_prefix} {segment.text.strip()}")
         else:
             full_text.append(transcript.text)
             
