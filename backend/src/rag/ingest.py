@@ -15,64 +15,37 @@ from langchain_core.documents import Document as LCDocument
 import os
 
 md = MarkItDown()
-_whisper_model = None
-
-def get_whisper_model():
-    global _whisper_model
-    if _whisper_model is None:
-        try:
-            from faster_whisper import WhisperModel
-            print("Loading Faster-Whisper model (base) with INT8 quantization for efficiency...")
-            # 'base' is suitable for 512MB RAM limit. int8 makes it even lighter.
-            _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
-        except ImportError:
-            print("❌ Error: 'faster-whisper' library not found. Please install it with 'pip install faster-whisper' to process audio/video files.")
-            raise ImportError("faster-whisper library is required for audio/video transcription.")
-    return _whisper_model
-
 def transcribe_with_whisper(file_path):
+    """Transcribe audio/video using OpenAI Whisper API (Cloud)."""
     try:
-        model = get_whisper_model()
-        print(f"--- Starting Faster-Whisper Transcription for: {os.path.basename(file_path)} ---")
+        import openai
+        from src.config import OPENAI_API_KEY
         
-        # faster-whisper returns a generator of segments
-        segments, info = model.transcribe(
-            file_path,
-            beam_size=5,
-            language=None, # Auto-detect
-            initial_prompt="This is a professional lecture in English or Vietnamese. Accurate transcription only.",
-            vad_filter=True, # Voice Activity Detection to filter out silence/noise
-            vad_parameters=dict(min_silence_duration_ms=500)
-        )
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
         
+        print(f"--- Starting OpenAI Cloud Whisper Transcription for: {os.path.basename(file_path)} ---")
+        
+        with open(file_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="verbose_json"
+            )
+            
         full_text = []
-        for segment in segments:
-            # Lưu vết thời gian (giây) vào đầu mỗi câu
-            formatted_text = f"[t={int(segment.start)}s] {segment.text}"
-            full_text.append(formatted_text)
+        if hasattr(transcript, 'segments'):
+            for segment in transcript.segments:
+                # Format: [t=10s] Nội dung...
+                timestamp_prefix = f"[t={int(segment['start'])}s]"
+                full_text.append(f"{timestamp_prefix} {segment['text'].strip()}")
+        else:
+            full_text.append(transcript.text)
             
-        print(f"✅ Transcription completed. Extracted {sum(len(t) for t in full_text)} characters.")
+        print(f"✅ Transcription completed via Cloud API. Extracted {sum(len(t) for t in full_text)} characters.")
         
-        # Extract and filter segments
-        hallucination_blacklist = [
-            "Hãy subscribe cho kênh", "Ghiền Mì Gõ", "không bỏ lỡ những video hấp dẫn",
-            "Cảm ơn các bạn đã xem video", "Like và subscribe", "Nhớ nhấn chuông thông báo",
-            "Thanks for watching", "Please subscribe", "Subscribe to my channel",
-            "Subtitles by", "Amara.org"
-        ]
-
-        filtered_segments = []
-        for text in full_text:
-            text = text.strip()
-            if len(text) < 2: continue
-            
-            is_hallucination = any(phrase.lower() in text.lower() for phrase in hallucination_blacklist)
-            if not is_hallucination:
-                filtered_segments.append(text)
-                
-        return "\n".join(filtered_segments)
+        return "\n".join(full_text)
     except Exception as e:
-        print(f"❌ Faster-Whisper Transcription Error: {e}")
+        print(f"❌ OpenAI Whisper API Error: {e}")
         raise e
 
 def load_documents():

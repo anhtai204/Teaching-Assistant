@@ -26,9 +26,14 @@ def get_embedding():
         )
         return _embedding_model
     except Exception as e:
-        print(f"⚠️ OpenAI Embeddings failed, attempting lightweight local fallback: {e}")
+        print(f"⚠️ OpenAI Embeddings failed, attempting Google Cloud fallback: {e}")
         
-        # Fallback về model local nếu cả OpenAI cũng lỗi
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-        _embedding_model = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
+        # Fallback về Google Gemini Embedding (Cloud) thay vì Local model
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        from src.config import GOOGLE_API_KEY
+        
+        _embedding_model = GoogleGenerativeAIEmbeddings(
+            model="models/text-embedding-004",
+            google_api_key=GOOGLE_API_KEY
+        )
         return _embedding_model
