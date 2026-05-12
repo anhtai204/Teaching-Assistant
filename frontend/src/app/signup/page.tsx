@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Card, Input, Select } from "@/components/ui/FormElements";
+import { apiFetch } from "@/lib/api";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function SignUpPage() {
     const role = "student";
 
     try {
-      const res = await fetch("/api/signup", {
+      const res = await apiFetch("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
           email,

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 
 import { LayoutDashboard, BookOpen, Clock, LogOut, Plus, ArrowRight, Search, PlusCircle, X, GraduationCap, Sparkles } from "lucide-react";
 import { StudentHeader } from "@/components/StudentHeader";
+import { apiFetch } from "@/lib/api";
 
 interface Course {
   id: string;
@@ -34,19 +35,16 @@ export default function StudentDashboard() {
       return;
     }
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const studentId = (session.user as any).id;
-      console.log(`DEBUG: Fetching courses for studentId: ${studentId} at ${baseUrl}`);
       
       if (!studentId) {
         console.error("DEBUG: studentId is undefined");
         return;
       }
 
-      const response = await fetch(`${baseUrl}/api/student/${studentId}/courses`);
+      const response = await apiFetch(`/api/student/${studentId}/courses`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`DEBUG: Fetched ${data.length} courses`, data);
         setCourses(data);
       } else {
         const errorText = await response.text();
@@ -61,8 +59,7 @@ export default function StudentDashboard() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses/enroll`, {
+      const response = await apiFetch(`/api/courses/enroll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

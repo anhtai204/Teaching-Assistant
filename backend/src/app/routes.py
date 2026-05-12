@@ -15,6 +15,7 @@ from src.memory.memory_store import append_conversation_turn
 from src.utils.security import generate_enrollment_code
 from src.utils.user_service import get_user_profile_sync
 from src.roadmap.roadmap_service import generate_roadmap_with_llm
+from src.utils.auth_middleware import require_auth
 
 router = APIRouter()
 
@@ -76,7 +77,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return {"message": "User registered successfully", "user_id": str(new_user.id)}
 
-@router.post("/api/auth/change-password")
+@router.post("/api/auth/change-password", dependencies=[Depends(require_auth)])
 async def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == request.user_id).first()
     if not user:
@@ -117,7 +118,7 @@ async def get_student_courses(student_id: UUID, db: Session = Depends(get_db)):
         for course in user.enrolled_courses
     ]
 
-@router.post("/api/courses/enroll")
+@router.post("/api/courses/enroll", dependencies=[Depends(require_auth)])
 async def enroll_course(request: CourseEnroll, db: Session = Depends(get_db)):
     """Enrolls a student in a course using an enrollment code."""
     course = db.query(Course).filter(Course.enrollment_code == request.enrollment_code).first()
@@ -158,7 +159,7 @@ async def get_courses(lecturer_id: Optional[str] = None, db: Session = Depends(g
         } for c in courses
     ]
 
-@router.post("/api/courses")
+@router.post("/api/courses", dependencies=[Depends(require_auth)])
 async def create_course(request: CourseCreate, db: Session = Depends(get_db)):
     print(f"DEBUG: Creating course with data: {request.dict()}")
     # Check if course code exists
@@ -198,7 +199,7 @@ async def get_course_students(course_id: str, db: Session = Depends(get_db)):
         } for s in course.students
     ]
 
-@router.delete("/api/courses/{course_id}/students/{student_id}")
+@router.delete("/api/courses/{course_id}/students/{student_id}", dependencies=[Depends(require_auth)])
 async def remove_student(course_id: str, student_id: str, db: Session = Depends(get_db)):
     statement = course_enrollments.delete().where(
         course_enrollments.c.course_id == course_id,
@@ -212,7 +213,7 @@ async def remove_student(course_id: str, student_id: str, db: Session = Depends(
         
     return {"message": "Student removed successfully"}
 
-@router.delete("/api/materials/{document_id}")
+@router.delete("/api/materials/{document_id}", dependencies=[Depends(require_auth)])
 async def delete_material(document_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -254,7 +255,7 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
         print(f"[DELETE] Final fallback error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.patch("/api/materials/{document_id}/visibility")
+@router.patch("/api/materials/{document_id}/visibility", dependencies=[Depends(require_auth)])
 async def toggle_visibility(document_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -286,7 +287,7 @@ async def toggle_visibility(document_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Visibility updated", "is_visible": doc.is_visible}
 
-@router.patch("/api/materials/{document_id}/rename")
+@router.patch("/api/materials/{document_id}/rename", dependencies=[Depends(require_auth)])
 async def rename_document(document_id: str, new_name: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -296,7 +297,7 @@ async def rename_document(document_id: str, new_name: str, db: Session = Depends
     db.commit()
     return {"message": "Document renamed successfully", "new_name": new_name}
 
-@router.patch("/api/materials/{document_id}/course")
+@router.patch("/api/materials/{document_id}/course", dependencies=[Depends(require_auth)])
 async def update_document_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -343,7 +344,7 @@ async def get_material_details(document_id: UUID, db: Session = Depends(get_db))
         "course_id": str(doc.course_id)
     }
 
-@router.patch("/api/courses/{course_id}/settings")
+@router.patch("/api/courses/{course_id}/settings", dependencies=[Depends(require_auth)])
 async def update_course_settings(course_id: str, request: CourseSettingsUpdate, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
@@ -659,7 +660,7 @@ async def resolve_moderation(message_id: str, request: ResolveRequest, db: Sessi
     db.commit()
     return {"message": "Resolved successfully"}
 
-@router.post("/api/materials/upload")
+@router.post("/api/materials/upload", dependencies=[Depends(require_auth)])
 async def upload_material(
     course_id: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None), # Renamed from lecturer_id
@@ -822,7 +823,7 @@ async def get_materials(
         })
     return results
 
-@router.post("/api/materials/{document_id}/link")
+@router.post("/api/materials/{document_id}/link", dependencies=[Depends(require_auth)])
 async def link_material_to_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     from src.models import course_document_links
     # Check if exists
@@ -836,7 +837,7 @@ async def link_material_to_course(document_id: str, course_id: str, db: Session 
         db.commit()
     return {"message": "Linked successfully"}
 
-@router.delete("/api/materials/{document_id}/link")
+@router.delete("/api/materials/{document_id}/link", dependencies=[Depends(require_auth)])
 async def unlink_material_from_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     from src.models import course_document_links
     db.execute(course_document_links.delete().where(
@@ -880,7 +881,7 @@ async def get_all_student_materials(student_id: UUID, db: Session = Depends(get_
     ).all()
     return [{'id': str(doc.id), 'name': doc.name, 'type': doc.file_type.upper(), 'url': doc.storage_url, 'is_visible': doc.is_visible} for doc in documents]
 
-@router.put('/api/courses/{course_id}')
+@router.put("/api/courses/{course_id}", dependencies=[Depends(require_auth)])
 async def update_course(course_id: str, request: CourseCreate, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:

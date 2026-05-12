@@ -7,6 +7,7 @@ import { LecturerHeader } from "@/components/LecturerHeader";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface Course {
   id: string;
@@ -33,7 +34,7 @@ export default function LecturerDashboard() {
   const fetchCourses = async () => {
     try {
       const lecturerId = (session?.user as any)?.id;
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses?lecturer_id=${lecturerId}`);
+      const response = await apiFetch(`/api/courses?lecturer_id=${lecturerId}`);
       if (response.ok) {
         const data = await response.json();
         setCourses(data);
@@ -54,11 +55,10 @@ export default function LecturerDashboard() {
     setIsLoading(true);
     try {
       const lecturerId = (session?.user as any)?.id;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const url = editingCourseId ? `${baseUrl}/api/courses/${editingCourseId}` : `${baseUrl}/api/courses`;
+      const url = editingCourseId ? `/api/courses/${editingCourseId}` : `/api/courses`;
       const method = editingCourseId ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newCourse, lecturer_id: lecturerId }),

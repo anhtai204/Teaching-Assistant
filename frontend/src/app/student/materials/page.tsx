@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { StudentHeader } from "@/components/StudentHeader";
 import { Folder, Upload, Globe, User, Search, Filter, Loader2, CheckCircle2, X, Plus } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface Material {
   id: string;
@@ -37,21 +38,20 @@ export default function StudentMaterialsPage() {
   const fetchMaterials = async () => {
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const studentId = (session?.user as any)?.id;
       if (!studentId) return;
 
       const mode = activeTab === "courses" ? "course" : "personal";
       const url = activeTab === "courses" 
-        ? `${baseUrl}/api/materials?user_id=${studentId}&mode=all` // All authorized materials
-        : `${baseUrl}/api/materials?user_id=${studentId}&mode=personal`;
+        ? `/api/materials?user_id=${studentId}&mode=all` // All authorized materials
+        : `/api/materials?user_id=${studentId}&mode=personal`;
 
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (response.ok) {
         const data = await response.json();
         const formattedData = data.map((m: any) => ({
           ...m,
-          url: m.url ? (m.url.startsWith('http') ? m.url : `${baseUrl}/${m.url}`) : "#"
+          url: m.url ? (m.url.startsWith('http') ? m.url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/${m.url}`) : "#"
         }));
         setMaterials(formattedData);
         setFilteredMaterials(formattedData);
@@ -78,8 +78,7 @@ export default function StudentMaterialsPage() {
     formData.append("user_id", (session.user as any).id);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/upload`, {
+      const response = await apiFetch(`/api/materials/upload`, {
         method: "POST",
         body: formData,
       });

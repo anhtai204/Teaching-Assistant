@@ -89,9 +89,11 @@ async def astream_agent(
                 final_answer = event["tutor"].get("final_answer", "")
                 if final_answer:
                     import json
-                    words = final_answer.split(' ')
-                    for word in words:
-                        chunk_str = json.dumps({"type": "token", "content": f"{word} "})
+                    import re
+                    # Split by non-whitespace and whitespace sequences to preserve formatting
+                    tokens = re.findall(r'\S+|\s+', final_answer)
+                    for token in tokens:
+                        chunk_str = json.dumps({"type": "token", "content": token})
                         yield f"data: {chunk_str}\n\n"
         
         yield "data: [DONE]\n\n"

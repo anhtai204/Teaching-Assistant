@@ -7,6 +7,7 @@ import { signIn, useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, Input } from "@/components/ui/FormElements";
+import { apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
@@ -45,7 +46,7 @@ export default function LoginPage() {
         setIsLoading(false);
       } else {
         // Fetch session to check role
-        const sessionRes = await fetch("/api/auth/session");
+        const sessionRes = await apiFetch("/api/auth/session");
         const session = await sessionRes.json();
 
         if (session?.user?.role === "lecturer") {

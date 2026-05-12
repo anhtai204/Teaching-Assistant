@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card, Input } from "@/components/ui/FormElements";
 import { Button } from "@/components/ui/Button";
 import { UserMenu } from "@/components/UserMenu";
+import { apiFetch } from "@/lib/api";
 
 interface Student {
   id: string;
@@ -49,10 +50,8 @@ export default function CourseManagement() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       // Fetch course details
-      const courseRes = await fetch(`${baseUrl}/api/courses`);
+      const courseRes = await apiFetch(`/api/courses`);
       if (courseRes.ok) {
         const allCourses = await courseRes.json();
         const found = allCourses.find((c: Course) => c.id === id);
@@ -63,7 +62,7 @@ export default function CourseManagement() {
       }
 
       // Fetch students
-      const studentsRes = await fetch(`${baseUrl}/api/courses/${id}/students`);
+      const studentsRes = await apiFetch(`/api/courses/${id}/students`);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         setStudents(data);
@@ -77,13 +76,11 @@ export default function CourseManagement() {
 
   const fetchAnalytics = async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       const [overviewRes, gapsRes, roadmapRes, pendingRes] = await Promise.all([
-        fetch(`${baseUrl}/api/analytics/overview?course_id=${id}`),
-        fetch(`${baseUrl}/api/analytics/knowledge-gaps?course_id=${id}`),
-        fetch(`${baseUrl}/api/analytics/roadmap?course_id=${id}`),
-        fetch(`${baseUrl}/api/moderation/pending?course_id=${id}`)
+        apiFetch(`/api/analytics/overview?course_id=${id}`),
+        apiFetch(`/api/analytics/knowledge-gaps?course_id=${id}`),
+        apiFetch(`/api/analytics/roadmap?course_id=${id}`),
+        apiFetch(`/api/moderation/pending?course_id=${id}`)
       ]);
 
       if (overviewRes.ok) setOverview(await overviewRes.json());
@@ -98,8 +95,7 @@ export default function CourseManagement() {
   const handleAnalyzeInsights = async () => {
     setIsAnalyzing(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/analytics/analyze?course_id=${id}`, {
+      const response = await apiFetch(`/api/analytics/analyze?course_id=${id}`, {
         method: "POST"
       });
       if (response.ok) {
@@ -117,8 +113,7 @@ export default function CourseManagement() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses/${id}/settings`, {
+      const response = await apiFetch(`/api/courses/${id}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ greeting_message: greeting }),
@@ -138,8 +133,7 @@ export default function CourseManagement() {
     if (!confirm("Are you sure you want to remove this student from the course?")) return;
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses/${id}/students/${studentId}`, {
+      const response = await apiFetch(`/api/courses/${id}/students/${studentId}`, {
         method: "DELETE",
       });
 

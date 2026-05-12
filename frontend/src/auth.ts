@@ -64,7 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (rows.length === 0) {
             console.log("✨ Creating new OAuth user in DB:", user.email);
             await db.query(
-              "INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, $2, $3::user_role, $4)",
+              "INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, $2, $3, $4)",
               [user.email, user.name, "student", "OAUTH_USER"]
             );
           } else {

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/FormElements";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { LecturerHeader } from "@/components/LecturerHeader";
+import { apiFetch } from "@/lib/api";
 
 interface FlaggedMessage {
   id: string;
@@ -41,8 +42,7 @@ function ModerationContent() {
   const fetchPending = async () => {
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/moderation/pending?course_id=${courseId}`);
+      const response = await apiFetch(`/api/moderation/pending?course_id=${courseId}`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data);
@@ -62,8 +62,7 @@ function ModerationContent() {
     setResolvingId(id);
     
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/moderation/resolve/${id}`, {
+      const response = await apiFetch(`/api/moderation/resolve/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manual_answer: manualAnswer }),

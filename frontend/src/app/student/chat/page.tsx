@@ -10,6 +10,7 @@ import { UserMenu } from "@/components/UserMenu";
 import { Send, Info, MessageSquare, History, ArrowLeft, Download, ExternalLink, Flag, ThumbsUp, ThumbsDown, Sparkles, X, FileText, CheckCircle2, PlusCircle, Clock, BookOpen, AlertTriangle, Paperclip, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { apiFetch } from "@/lib/api";
 
 interface Message {
   id?: string;
@@ -69,8 +70,7 @@ function ChatContent() {
   const fetchRoadmap = async () => {
     try {
       const studentId = (session?.user as any)?.id || "default";
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}`);
+      const res = await apiFetch(`/api/roadmap?user_id=${studentId}`);
       if (res.ok) {
         const data = await res.json();
         setRoadmapItems(data.items || []);
@@ -82,8 +82,7 @@ function ChatContent() {
 
   const handleUpdateProgress = async (itemId: string, newProgress: number) => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/roadmap/${itemId}`, {
+      const res = await apiFetch(`/api/roadmap/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ progress: newProgress })
@@ -156,8 +155,7 @@ function ChatContent() {
 
   const fetchCourseDetails = async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/courses`);
+      const res = await apiFetch(`/api/courses`);
       if (res.ok) {
         const all = await res.json();
         const found = all.find((c: any) => c.id === courseId);
@@ -171,8 +169,7 @@ function ChatContent() {
   const fetchSessions = async () => {
     try {
       const studentId = (session?.user as any)?.id || "default";
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/chat/sessions?student_id=${studentId}&course_id=${courseId}`);
+      const res = await apiFetch(`/api/chat/sessions?student_id=${studentId}&course_id=${courseId}`);
       if (res.ok) {
         const data = await res.json();
         setChatSessions(data);
@@ -185,13 +182,12 @@ function ChatContent() {
   const fetchAvailableFiles = async () => {
     if (!session?.user) return;
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const studentId = (session.user as any).id;
       // Fetch both personal materials and course materials
       const url = courseId 
-        ? `${baseUrl}/api/materials?user_id=${studentId}&course_id=${courseId}&mode=all`
-        : `${baseUrl}/api/materials?user_id=${studentId}&mode=all`;
-      const response = await fetch(url);
+        ? `/api/materials?user_id=${studentId}&course_id=${courseId}&mode=all`
+        : `/api/materials?user_id=${studentId}&mode=all`;
+      const response = await apiFetch(url);
       if (response.ok) {
         const data = await response.json();
         setAvailableFiles(data);
@@ -211,8 +207,7 @@ function ChatContent() {
     formData.append("user_id", (session.user as any).id);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/upload`, {
+      const response = await apiFetch(`/api/materials/upload`, {
         method: "POST",
         body: formData,
       });
@@ -234,8 +229,7 @@ function ChatContent() {
 
   const fetchSessionMessages = async (sessionId: string) => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/chat/sessions/${sessionId}/messages`);
+      const res = await apiFetch(`/api/chat/sessions/${sessionId}/messages`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -272,12 +266,10 @@ function ChatContent() {
 
     try {
       const studentId = (session?.user as any)?.id || "default";
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
       const fileIdsParam = selectedFileIds.length > 0 ? `&file_ids=${encodeURIComponent(JSON.stringify(selectedFileIds))}` : "";
-      const streamUrl = `${baseUrl}/api/chat/stream?message=${encodeURIComponent(currentInput)}&course_id=${courseId || "default"}&user_id=${studentId}&session_id=${currentSessionId || ""}${fileIdsParam}`;
+      const streamUrl = `/api/chat/stream?message=${encodeURIComponent(currentInput)}&course_id=${courseId || "default"}&user_id=${studentId}&session_id=${currentSessionId || ""}${fileIdsParam}`;
 
-      const response = await fetch(streamUrl, {
+      const response = await apiFetch(streamUrl, {
         signal: abortControllerRef.current.signal // Gắn signal để có thể hủy fetch
       });
 
@@ -361,8 +353,7 @@ function ChatContent() {
 
   const handleFeedback = async (messageId: string, rating: number | null, isReport = false) => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      await fetch(`${baseUrl}/api/chat/messages/${messageId}/feedback`, {
+      await apiFetch(`/api/chat/messages/${messageId}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, is_report: isReport }),
@@ -548,8 +539,7 @@ function ChatContent() {
                 onClick={async () => {
                   try {
                     const studentId = (session?.user as any)?.id || "default";
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                    const res = await fetch(`${baseUrl}/api/roadmap/refresh?user_id=${studentId}`, { method: 'POST' });
+                    const res = await apiFetch(`/api/roadmap/refresh?user_id=${studentId}`, { method: 'POST' });
                     if (res.ok) {
                       const data = await res.json();
                       setRoadmapItems(data.items || []);

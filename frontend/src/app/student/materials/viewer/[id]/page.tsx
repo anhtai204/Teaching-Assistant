@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MaterialViewer } from "@/components/materials/MaterialViewer";
 import { Loader2, AlertCircle } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function MaterialViewerPage() {
   const params = useParams();
@@ -19,8 +20,7 @@ export default function MaterialViewerPage() {
   useEffect(() => {
     const fetchMaterial = async () => {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const response = await fetch(`${baseUrl}/api/materials/${id}`);
+        const response = await apiFetch(`/api/materials/${id}`);
         
         if (!response.ok) {
           throw new Error("Failed to fetch material details");
@@ -30,7 +30,7 @@ export default function MaterialViewerPage() {
         
         // Ensure URL is absolute
         if (data.url && !data.url.startsWith('http')) {
-          data.url = `${baseUrl}/${data.url}`;
+          data.url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/${data.url}`;
         }
         
         setMaterial(data);

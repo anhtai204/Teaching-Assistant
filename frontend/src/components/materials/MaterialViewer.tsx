@@ -17,6 +17,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { apiFetch } from "@/lib/api";
 
 interface MaterialViewerProps {
   material: {
@@ -126,7 +127,7 @@ const TextViewer: React.FC<{ url: string }> = ({ url }) => {
   useEffect(() => {
     const fetchAndDecode = async () => {
       try {
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         const blob = await response.blob();
         const buffer = await blob.arrayBuffer();
         
@@ -179,7 +180,7 @@ const MarkdownViewer: React.FC<{ url: string }> = ({ url }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(url)
+    apiFetch(url)
       .then(res => res.text())
       .then(text => {
         setContent(text);
