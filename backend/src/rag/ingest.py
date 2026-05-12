@@ -14,8 +14,17 @@ from markitdown import MarkItDown
 from langchain_core.documents import Document as LCDocument
 import os
 
-md = MarkItDown()
+# Heavy models are moved inside functions to save RAM on startup
 _whisper_model = None
+_markitdown = None
+
+def get_markitdown():
+    global _markitdown
+    if _markitdown is None:
+        from markitdown import MarkItDown
+        print("Initializing MarkItDown (Lazy Loading)...")
+        _markitdown = MarkItDown()
+    return _markitdown
 
 def get_whisper_model():
     global _whisper_model
@@ -96,7 +105,8 @@ def load_documents():
                 content = transcribe_with_whisper(path)
             else:
                 print(f'Converting {file} to markdown...')
-                result = md.convert(path)
+                md_service = get_markitdown()
+                result = md_service.convert(path)
                 content = result.text_content
             
             # Create a LangChain Document from the content
@@ -152,7 +162,8 @@ def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: 
             content = transcribe_with_whisper(file_path)
         else:
             print(f'Converting {file_name} to markdown...')
-            result = md.convert(file_path)
+            md_service = get_markitdown()
+            result = md_service.convert(file_path)
             content = result.text_content
         
         if not content or len(content.strip()) == 0:
