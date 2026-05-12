@@ -285,6 +285,46 @@ async def toggle_visibility(document_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Visibility updated", "is_visible": doc.is_visible}
 
+@router.patch("/api/materials/{document_id}/rename")
+async def rename_document(document_id: str, new_name: str, db: Session = Depends(get_db)):
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    doc.name = new_name
+    db.commit()
+    return {"message": "Document renamed successfully", "new_name": new_name}
+
+@router.patch("/api/materials/{document_id}/course")
+async def update_document_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # 1. Update SQL DB
+    doc.course_id = course_id
+    
+    # 2. Update VectorDB (Chroma) metadata for all chunks
+    from src.rag.vectorstore import get_vectorstore
+    vectorstore = get_vectorstore()
+    if hasattr(vectorstore, "_collection"):
+        try:
+            # Get all chunk IDs for this document
+            results = vectorstore._collection.get(where={"document_id": str(document_id)})
+            ids = results.get("ids", [])
+            if ids:
+                # Update course_id metadata
+                vectorstore._collection.update(
+                    ids=ids,
+                    metadatas=[{"course_id": str(course_id)}] * len(ids)
+                )
+                print(f"[COURSE_UPDATE] Updated {len(ids)} chunks for doc {document_id} to course {course_id}")
+        except Exception as e:
+            print(f"Error updating vectorstore course_id: {e}")
+            
+    db.commit()
+    return {"message": "Document assigned to course successfully", "course_id": course_id}
+
 @router.get("/api/materials/{document_id}")
 async def get_material_details(document_id: UUID, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
@@ -594,154 +634,171 @@ async def resolve_moderation(message_id: str, request: ResolveRequest, db: Sessi
 @router.post("/api/materials/upload")
 async def upload_material(
     course_id: Optional[str] = None,
+    lecturer_id: Optional[str] = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     try:
-        # --- NEW: File Size Validation for MVP (Free Tier Protection) ---
+        # --- NEW: File Size Validation for MVP ---
         MAX_DOC_SIZE = 10 * 1024 * 1024  # 10MB
-        MAX_MEDIA_SIZE = 25 * 1024 * 1024 # 25MB (OpenAI Whisper limit)
+        MAX_MEDIA_SIZE = 25 * 1024 * 1024 # 25MB
         
         file_ext = file.filename.split('.')[-1].lower()
         is_media = file_ext in ['mp3', 'mp4', 'wav', 'm4a', 'flac']
         
-        # Get file size
         file.file.seek(0, os.SEEK_END)
         file_size = file.file.tell()
-        file.file.seek(0) # Reset to beginning for reading
+        file.file.seek(0)
         
         limit = MAX_MEDIA_SIZE if is_media else MAX_DOC_SIZE
-        limit_mb = 25 if is_media else 10
-        
         if file_size > limit:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File quá lớn ({file_size/(1024*1024):.1f}MB). Giới hạn cho bản MVP là {limit_mb}MB để đảm bảo hệ thống chạy ổn định."
-            )
-        # ----------------------------------------------------------------
+            raise HTTPException(status_code=400, detail="File quá lớn.")
+        # ----------------------------------------
 
         from src.supabase_client import supabase
         
-        # 1. Check for existing document
-        if course_id:
-            existing_doc = db.query(Document).filter(
-                Document.course_id == course_id,
-                Document.name == file.filename
-            ).first()
+        # 1. Check for existing document by name and lecturer
+        existing_doc = db.query(Document).filter(
+            Document.name == file.filename,
+            Document.lecturer_id == lecturer_id
+        ).first()
+        
+        if existing_doc:
+            # Just link to new course if provided
+            if course_id:
+                from src.models import course_document_links
+                # Check if link exists
+                existing_link = db.execute(
+                    course_document_links.select().where(
+                        course_document_links.c.course_id == course_id,
+                        course_document_links.c.document_id == existing_doc.id
+                    )
+                ).first()
+                
+                if not existing_link:
+                    db.execute(course_document_links.insert().values(course_id=course_id, document_id=existing_doc.id))
+                    db.commit()
             
-            if existing_doc:
-                print(f"Document {file.filename} already exists in course {course_id}, skipping duplicate creation.")
-                return {
-                    "message": f"Document {file.filename} already exists",
-                    "document_id": str(existing_doc.id),
-                    "status": existing_doc.status
-                }
+            return {
+                "message": f"Document {file.filename} already exists, linked to course.",
+                "document_id": str(existing_doc.id),
+                "status": existing_doc.status
+            }
 
         # 2. Upload to Supabase Storage
         file_content = await file.read()
-        
-        # Sanitize filename to avoid "InvalidKey" errors with spaces/special chars
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
-        # Use a default folder if course_id is missing
-        folder_name = course_id if course_id else "unclassified"
-        storage_path = f"{folder_name}/{safe_filename}"
+        storage_path = f"library/{lecturer_id or 'shared'}/{safe_filename}"
         
-        # Ensure bucket exists (or handle error if it doesn't)
-        try:
-            # Note: Upsert=True allows replacing if needed
-            res = supabase.storage.from_("course-materials").upload(
-                path=storage_path,
-                file=file_content,
-                file_options={"upsert": "true", "content-type": file.content_type}
-            )
-        except Exception as storage_err:
-            print(f"Supabase Storage Error: {storage_err}")
-            # Fallback to local if storage fails? No, better to fail and inform.
-            raise HTTPException(status_code=500, detail=f"Storage upload failed: {str(storage_err)}")
-
-        # 3. Get public URL
+        supabase.storage.from_("course-materials").upload(
+            path=storage_path,
+            file=file_content,
+            file_options={"upsert": "true", "content-type": file.content_type}
+        )
         storage_url = supabase.storage.from_("course-materials").get_public_url(storage_path)
 
-        # 4. Create local temporary file for ingestion (since ingest_file needs a path)
-        os.makedirs("temp_uploads", exist_ok=True)
-        temp_path = os.path.join("temp_uploads", file.filename)
-        with open(temp_path, "wb") as f:
-            f.write(file_content)
-
+        # 3. Create Document entry
         new_doc = Document(
-            course_id=course_id,
+            lecturer_id=lecturer_id,
             name=file.filename,
             file_type=file.filename.split('.')[-1],
             storage_url=storage_url,
             status="processing"
         )
         db.add(new_doc)
-        db.commit()
-        db.refresh(new_doc)
+        db.flush() # Get ID
         
-        # 5. Trigger Ingestion (using the local temp file)
+        # 4. Link to course if provided
+        if course_id:
+            from src.models import course_document_links
+            db.execute(course_document_links.insert().values(course_id=course_id, document_id=new_doc.id))
+        
+        db.commit()
+        
+        # 5. Ingest
+        os.makedirs("temp_uploads", exist_ok=True)
+        temp_path = os.path.join("temp_uploads", f"{new_doc.id}_{file.filename}")
+        with open(temp_path, "wb") as f:
+            f.write(file_content)
+            
         num_chunks = ingest_file(temp_path, str(new_doc.id), course_id, db)
         
-        # Clean up temp file
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        
-        # 6. Update Document status
+            
         new_doc.status = "indexed"
         db.commit()
         
-        # 7. Log to session.jsonl
-        append_conversation_turn(
-            user_id="lecturer_system",
-            user_text=f"Uploaded and indexed: {file.filename}",
-            assistant_text=f"Successfully processed into {num_chunks} chunks.",
-            session_id="system_log"
-        )
-        
-        return {
-            "message": f"Successfully uploaded and indexed {file.filename}",
-            "document_id": str(new_doc.id),
-            "chunks": num_chunks
-        }
+        return {"message": "Success", "document_id": str(new_doc.id), "chunks": num_chunks}
     except Exception as e:
         db.rollback()
-        print(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/materials")
 async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """Returns materials filtered by course or all materials for a lecturer."""
+    from src.models import course_document_links, Course
+    
+    from src.models import course_document_links, Course
+    
     query = db.query(Document)
+    
     if course_id:
-        query = query.filter(Document.course_id == course_id)
+        # Filter by course
+        query = query.join(course_document_links).filter(course_document_links.c.course_id == course_id)
     elif lecturer_id:
-        # Join with Course to filter by lecturer, but also include documents with NO course
-        # if they were uploaded by this lecturer (need to add lecturer_id to Document table or handle differently)
-        # For now, let's just return documents that belong to any of the lecturer's courses
-        query = query.join(Course).filter(Course.lecturer_id == lecturer_id)
+        # Filter by lecturer (Library view)
+        query = query.filter(Document.lecturer_id == lecturer_id)
     else:
         return []
-    documents = query.order_by(Document.created_at.desc()).all()
+
+    docs = query.all()
     
-    return [
-        {
+    # Consistently enrich with course names for the UI
+    results = []
+    for doc in docs:
+        course_names = [c.name for c in doc.courses]
+        results.append({
             "id": str(doc.id),
             "name": doc.name,
-            "type": doc.file_type.upper(),
-            "status": doc.status.capitalize(),
+            "type": doc.file_type,
+            "status": doc.status,
             "is_visible": doc.is_visible,
-            "course_name": doc.course.name if doc.course else "General"
-        }
-        for doc in documents
-    ]
+            "course_name": ", ".join(course_names) if course_names else "Unassigned"
+        })
+    return results
 
+@router.post("/api/materials/{document_id}/link")
+async def link_material_to_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
+    from src.models import course_document_links
+    # Check if exists
+    existing = db.execute(course_document_links.select().where(
+        course_document_links.c.course_id == course_id,
+        course_document_links.c.document_id == document_id
+    )).first()
+    
+    if not existing:
+        db.execute(course_document_links.insert().values(course_id=course_id, document_id=document_id))
+        db.commit()
+    return {"message": "Linked successfully"}
+
+@router.delete("/api/materials/{document_id}/link")
+async def unlink_material_from_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
+    from src.models import course_document_links
+    db.execute(course_document_links.delete().where(
+        course_document_links.c.course_id == course_id,
+        course_document_links.c.document_id == document_id
+    ))
+    db.commit()
+    return {"message": "Unlinked successfully"}
 @router.get("/api/student/courses/{course_id}/materials")
 async def get_student_materials(course_id: UUID, db: Session = Depends(get_db)):
     """Returns materials for a student to view/download."""
-    documents = db.query(Document).filter(
-        Document.course_id == course_id,
-        Document.status == "indexed"
+    from src.models import course_document_links
+    documents = db.query(Document).join(course_document_links).filter(
+        course_document_links.c.course_id == course_id,
+        Document.status == "indexed",
+        Document.is_visible == True
     ).all()
     
     return [
@@ -757,12 +814,17 @@ async def get_student_materials(course_id: UUID, db: Session = Depends(get_db)):
 
 @router.get('/api/student/{student_id}/all_materials')
 async def get_all_student_materials(student_id: UUID, db: Session = Depends(get_db)):
+    from src.models import course_document_links
     user = db.query(User).filter(User.id == student_id).first()
     if not user:
         raise HTTPException(status_code=404, detail='Student not found')
     course_ids = [course.id for course in user.enrolled_courses]
-    documents = db.query(Document).filter(Document.course_id.in_(course_ids), Document.status == 'indexed').all()
-    return [{'id': str(doc.id), 'name': doc.name, 'type': doc.file_type.upper(), 'url': doc.storage_url, 'course_name': doc.course.name, 'is_visible': doc.is_visible} for doc in documents]
+    documents = db.query(Document).join(course_document_links).filter(
+        course_document_links.c.course_id.in_(course_ids), 
+        Document.status == 'indexed',
+        Document.is_visible == True
+    ).all()
+    return [{'id': str(doc.id), 'name': doc.name, 'type': doc.file_type.upper(), 'url': doc.storage_url, 'is_visible': doc.is_visible} for doc in documents]
 
 @router.put('/api/courses/{course_id}')
 async def update_course(course_id: str, request: CourseCreate, db: Session = Depends(get_db)):

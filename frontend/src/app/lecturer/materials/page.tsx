@@ -1,13 +1,14 @@
 "use client";
 
 import { Card } from "@/components/ui/FormElements";
-import { UploadCloud, FileText, Database, Shield, Eye, EyeOff, Trash2, LayoutDashboard, MessageSquare, BarChart3, ShieldAlert, X, CheckCircle2, AlertCircle, ExternalLink, Clock, PlusCircle, BookOpen } from "lucide-react";
+import { UploadCloud, FileText, Database, Shield, Eye, EyeOff, Trash2, LayoutDashboard, MessageSquare, BarChart3, ShieldAlert, X, CheckCircle2, AlertCircle, ExternalLink, Clock, PlusCircle, BookOpen, Edit2, Loader2, Link2Off } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { LecturerHeader } from "@/components/LecturerHeader";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface Material {
   id: string;
@@ -40,33 +41,45 @@ function MaterialsContent() {
   const courseId = searchParams.get("course_id");
 
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [courseName, setCourseName] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchMaterials();
+    fetchCourses();
     if (courseId) {
-      fetchCourseDetails();
-    } else {
-      setCourseName("All Courses");
+      setSelectedCourseId(courseId);
     }
   }, [courseId, session?.user?.email]);
 
-  const fetchCourseDetails = async () => {
+  const fetchCourses = async () => {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses`);
+      const lecturerId = (session?.user as any)?.id;
+      const url = lecturerId ? `${baseUrl}/api/courses?lecturer_id=${lecturerId}` : `${baseUrl}/api/courses`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        const course = data.find((c: any) => c.id === courseId);
-        if (course) setCourseName(course.name);
+        setCourses(data);
+        if (courseId) {
+          const current = data.find((c: any) => c.id === courseId);
+          if (current) setCourseName(current.name);
+        }
       }
     } catch (error) {
-      console.error("Error fetching course details:", error);
+      console.error("Error fetching courses:", error);
     }
+  };
+
+  const fetchCourseDetails = async () => {
+    // Legacy - replaced by fetchCourses logic
   };
 
   useEffect(() => {
@@ -121,9 +134,16 @@ function MaterialsContent() {
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const lecturerId = (session?.user as any)?.id;
       let uploadUrl = `${baseUrl}/api/materials/upload`;
-      if (courseId) {
-        uploadUrl += `?course_id=${courseId}`;
+      
+      const queryParams = new URLSearchParams();
+      const targetCourseId = courseId || selectedCourseId;
+      if (targetCourseId) queryParams.append("course_id", targetCourseId);
+      if (lecturerId) queryParams.append("lecturer_id", lecturerId);
+      
+      if (queryParams.toString()) {
+        uploadUrl += `?${queryParams.toString()}`;
       }
       
       const response = await fetch(uploadUrl, {
@@ -142,6 +162,47 @@ function MaterialsContent() {
       alert("Error connecting to backend.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleAssignCourse = async (documentId: string, targetCourseId: string) => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${baseUrl}/api/materials/${documentId}/link?course_id=${targetCourseId}`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        fetchMaterials(false);
+      }
+    } catch (error) {
+      console.error("Assign course error:", error);
+    }
+  };
+
+  const handleRename = async (documentId: string, newName: string) => {
+    if (!newName || newName.trim() === "") {
+      setEditingId(null);
+      return;
+    }
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${baseUrl}/api/materials/${documentId}/rename?new_name=${encodeURIComponent(newName)}`, {
+        method: "PATCH",
+      });
+
+      if (response.ok) {
+        toast.success("Đã đổi tên tài liệu.");
+        fetchMaterials(false);
+      } else {
+        toast.error("Lỗi khi đổi tên.");
+      }
+    } catch (error) {
+      console.error("Rename error:", error);
+      toast.error("Lỗi kết nối.");
+    } finally {
+      setEditingId(null);
     }
   };
 
@@ -168,20 +229,30 @@ function MaterialsContent() {
   };
 
   const handleDeleteMaterial = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this material? This will also remove it from AI memory.")) return;
+    toast("Xác nhận xóa tài liệu vĩnh viễn?", {
+      description: "Hành động này sẽ xóa dữ liệu khỏi cả Database và bộ nhớ AI.",
+      action: {
+        label: "Xác nhận Xóa",
+        onClick: async () => {
+          try {
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${baseUrl}/api/materials/${id}`, {
+              method: "DELETE",
+            });
 
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/${id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setMaterials(prev => prev.filter(m => m.id !== id));
+            if (response.ok) {
+              toast.success("Đã xóa tài liệu.");
+              setMaterials(prev => prev.filter(m => m.id !== id));
+            } else {
+              toast.error("Không thể xóa tài liệu.");
+            }
+          } catch (error) {
+            console.error("Delete error:", error);
+            toast.error("Lỗi kết nối.");
+          }
+        }
       }
-    } catch (error) {
-      console.error("Delete error:", error);
-    }
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -210,30 +281,47 @@ function MaterialsContent() {
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
           <div className="space-y-3">
             <h2 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight">
-              {courseName ? `${courseName} ` : "Course "}
+              {courseId ? `${courseName} ` : "Global "}
               <span className="text-blue-600 dark:text-blue-400">Knowledge Base</span>
             </h2>
             <p className="text-lg text-slate-500 dark:text-white/60 font-medium max-w-2xl">
               Feed your AI teaching assistant with official documents, lecture notes, and media files to improve accuracy.
             </p>
           </div>
-          <Button
-            className="h-16 px-10 text-lg shadow-xl shadow-blue-500/20"
-            onClick={handleUploadClick}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <span className="flex items-center gap-2">
-                <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <PlusCircle className="w-6 h-6" />
-                Add Document
-              </span>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {!courseId && (
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Target Course</span>
+                <select 
+                  className="h-12 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1A3A] text-sm font-bold text-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  value={selectedCourseId}
+                  onChange={(e) => setSelectedCourseId(e.target.value)}
+                >
+                  <option value="">-- No Course (General) --</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
             )}
-          </Button>
+            <Button
+              className="h-16 px-10 text-lg shadow-xl shadow-blue-500/20 self-end whitespace-nowrap flex-shrink-0"
+              onClick={handleUploadClick}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <PlusCircle className="w-6 h-6" />
+                  Add Document
+                </span>
+              )}
+            </Button>
+          </div>
         </header>
 
         <input
@@ -312,7 +400,36 @@ function MaterialsContent() {
                             <FileText className="w-6 h-6" />
                           </div>
                           <div>
-                            <span className={`text-base font-bold transition-colors ${m.is_visible ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-white/30"}`}>{m.name}</span>
+                            <div className="flex items-center gap-2 group/name">
+                              {editingId === m.id ? (
+                                <input
+                                  type="text"
+                                  className="bg-white dark:bg-white/5 border border-blue-500 rounded px-2 py-1 text-base font-bold outline-none w-full max-w-md focus:ring-2 focus:ring-blue-500/50"
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onBlur={() => handleRename(m.id, editingName)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleRename(m.id, editingName);
+                                    if (e.key === "Escape") setEditingId(null);
+                                  }}
+                                  autoFocus
+                                />
+                              ) : (
+                                <>
+                                  <span className={`text-base font-bold transition-colors ${m.is_visible ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-white/30"}`}>{m.name}</span>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingId(m.id);
+                                      setEditingName(m.name);
+                                    }}
+                                    className="opacity-0 group-hover/name:opacity-100 p-1 text-slate-400 hover:text-blue-600 transition-all"
+                                    title="Rename Document"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 mt-1 opacity-50">
                               <Clock className="w-3 h-3 text-slate-400 dark:text-white" />
                               <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400 dark:text-white">Uploaded Recently</span>
@@ -321,9 +438,68 @@ function MaterialsContent() {
                         </div>
                       </td>
                       <td className="px-8 py-7">
-                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-100/50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-3 py-1.5 rounded-full uppercase tracking-tighter">
-                          {m.course_name}
-                        </span>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {m.course_name && m.course_name !== "Unassigned" ? (
+                            m.course_name.split(", ").map((name, idx) => {
+                              // We need the course ID for unlinking. 
+                              // Since we only have the name string here, we'll find the ID from the courses list.
+                              const linkedCourse = courses.find(c => c.name === name);
+                              const linkedCourseId = linkedCourse?.id;
+                              
+                              return (
+                                <div key={idx} className="group/tag relative flex items-center">
+                                  <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-100/50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-3 py-1.5 rounded-full uppercase tracking-tighter">
+                                    {name}
+                                  </span>
+                                  {linkedCourseId && (
+                                    <button 
+                                      onClick={() => {
+                                        toast(`Gỡ tài liệu khỏi khóa học "${name}"?`, {
+                                          description: "Tài liệu vẫn sẽ tồn tại trong Thư viện tổng của bạn.",
+                                          action: {
+                                            label: "Gỡ ngay",
+                                            onClick: async () => {
+                                              try {
+                                                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                                const res = await fetch(`${baseUrl}/api/materials/${m.id}/link?course_id=${linkedCourseId}`, { method: 'DELETE' });
+                                                if (res.ok) {
+                                                  toast.success(`Đã gỡ khỏi khóa học ${name}`);
+                                                  fetchMaterials(false);
+                                                }
+                                              } catch (error) {
+                                                toast.error("Lỗi khi gỡ tài liệu");
+                                              }
+                                            }
+                                          }
+                                        });
+                                      }}
+                                      className="ml-1 text-red-400 hover:text-red-600 opacity-0 group-hover/tag:opacity-100 transition-opacity"
+                                      title={`Unlink from ${name}`}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : null}
+                          
+                          <select 
+                            className="text-[10px] font-bold bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                            onChange={(e) => {
+                              if(e.target.value) {
+                                handleAssignCourse(m.id, e.target.value);
+                                e.target.value = "";
+                              }
+                            }}
+                            value=""
+                          >
+                            <option value="">+ Link Course</option>
+                            {courses.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td className="px-8 py-7">
                         <span className="text-xs font-bold text-slate-400 dark:text-white/50 uppercase tracking-widest">{m.type}</span>
@@ -347,7 +523,7 @@ function MaterialsContent() {
                         </div>
                       </td>
                       <td className="px-8 py-7 text-right">
-                        <div className="flex justify-end items-center gap-3 transition-all duration-300">
+                        <div className="flex justify-end items-center gap-2 transition-all duration-300">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -359,10 +535,36 @@ function MaterialsContent() {
                           >
                             {m.is_visible ? <><Eye className="w-4 h-4 mr-2" /> Hide</> : <><EyeOff className="w-4 h-4 mr-2" /> Show</>}
                           </Button>
+                          
+                          {courseId && (
+                            <button
+                              className="p-2.5 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-xl transition-all cursor-pointer"
+                              onClick={() => {
+                                toast("Gỡ tài liệu khỏi khóa học này?", {
+                                  description: "Tài liệu vẫn sẽ tồn tại trong Thư viện tổng của bạn.",
+                                  action: {
+                                    label: "Gỡ ngay",
+                                    onClick: async () => {
+                                      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                      const res = await fetch(`${baseUrl}/api/materials/${m.id}/link?course_id=${courseId}`, { method: 'DELETE' });
+                                      if (res.ok) {
+                                        toast.success("Đã gỡ khỏi khóa học.");
+                                        fetchMaterials(false);
+                                      }
+                                    }
+                                  }
+                                });
+                              }}
+                              title="Unlink from this Course"
+                            >
+                              <Link2Off className="h-5 w-5" />
+                            </button>
+                          )}
+
                           <button
                             className="p-2.5 text-slate-300 dark:text-white/40 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
                             onClick={() => handleDeleteMaterial(m.id)}
-                            title="Purge Document"
+                            title="Delete Permanently (Purge)"
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>

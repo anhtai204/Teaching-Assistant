@@ -20,6 +20,7 @@ def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SE
     """
     db = SessionLocal()
     try:
+        from src.models import course_document_links
         embedding_model = get_embedding()
         # Generate query embedding
         if hasattr(embedding_model, "embed_query"):
@@ -28,9 +29,11 @@ def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SE
             query_embedding = embedding_model.encode(query).tolist()
             
         # Use pgvector cosine distance search
-        # We join with Document to respect visibility settings
-        results = db.query(DocumentChunk, Document).join(Document).filter(
-            Document.course_id == str(course_id),
+        # Join with Document and course_document_links to respect many-to-many mapping
+        results = db.query(DocumentChunk, Document).join(Document).join(
+            course_document_links, Document.id == course_document_links.c.document_id
+        ).filter(
+            course_document_links.c.course_id == str(course_id),
             Document.is_visible == True,
             Document.status == "indexed"
         ).order_by(

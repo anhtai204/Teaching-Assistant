@@ -19,6 +19,15 @@ course_enrollments = Table(
     Column("enrolled_at", DateTime(timezone=True), server_default=func.now()),
 )
 
+# Association table for course documents (Many-to-Many)
+course_document_links = Table(
+    "course_document_links",
+    Base.metadata,
+    Column("course_id", UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True),
+    Column("document_id", UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
+    Column("linked_at", DateTime(timezone=True), server_default=func.now()),
+)
+
 class User(Base):
     __tablename__ = "users"
 
@@ -50,14 +59,14 @@ class Course(Base):
     # Relationships
     lecturer = relationship("User", back_populates="lectured_courses")
     students = relationship("User", secondary=course_enrollments, back_populates="enrolled_courses")
-    documents = relationship("Document", back_populates="course")
+    documents = relationship("Document", secondary=course_document_links, back_populates="courses")
     chat_sessions = relationship("ChatSession", back_populates="course")
 
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
+    lecturer_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     file_type = Column(String, nullable=False) # 'pdf', 'slide', 'video', 'transcript'
     storage_url = Column(String, nullable=False)
@@ -67,7 +76,7 @@ class Document(Base):
     indexed_at = Column(DateTime(timezone=True))
 
     # Relationships
-    course = relationship("Course", back_populates="documents")
+    courses = relationship("Course", secondary=course_document_links, back_populates="documents")
     chunks = relationship("DocumentChunk", back_populates="document")
 
 from pgvector.sqlalchemy import Vector

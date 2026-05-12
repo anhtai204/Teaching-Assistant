@@ -141,8 +141,7 @@ def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: 
                 "file_path": file_path,
                 "format": ext,
                 "is_visible": True,
-                "document_id": str(document_id),
-                "course_id": str(course_id)
+                "document_id": str(document_id)
             }
         )
         

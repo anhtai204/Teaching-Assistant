@@ -11,6 +11,7 @@ import AuthProvider from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { Toaster } from "sonner";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -24,7 +25,10 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body>
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <Toaster richColors position="top-right" />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
