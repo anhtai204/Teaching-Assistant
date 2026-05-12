@@ -7,7 +7,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-1.5-flash")
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

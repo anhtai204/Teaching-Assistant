@@ -28,7 +28,7 @@ async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
         db.query(ChatMessage)
         .join(ChatSession)
         .filter(ChatSession.course_id == course_id)
-        .filter((ChatMessage.is_flagged == True) | (ChatMessage.was_unanswered == True))
+        .filter(ChatMessage.is_flagged == True)
         .count()
     )
     
@@ -63,7 +63,6 @@ async def get_knowledge_gaps(course_id: str, db: Session = Depends(get_db)):
         {
             "topic": gap.topic,
             "frequency": gap.frequency,
-            "gap_score": gap.gap_score,
             "last_detected": gap.last_detected_at
         }
         for gap in gaps
@@ -81,7 +80,7 @@ async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
         db.query(ChatMessage)
         .join(ChatSession)
         .filter(ChatSession.course_id == course_id)
-        .filter((ChatMessage.is_flagged == True) | (ChatMessage.was_unanswered == True) | (ChatMessage.feedback_rating == -1))
+        .filter((ChatMessage.is_flagged == True) | (ChatMessage.feedback_rating == -1))
         .limit(50)
         .all()
     )
@@ -106,7 +105,7 @@ async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
         history_data.append({
             "user_msg": user_msg_content if msg.role == "assistant" else msg.content,
             "ai_msg": msg.content if msg.role == "assistant" else "N/A",
-            "feedback": f"Flagged: {msg.is_flagged}, Rating: {msg.feedback_rating}, Unanswered: {msg.was_unanswered}"
+            "feedback": f"Flagged: {msg.is_flagged}, Rating: {msg.feedback_rating}"
         })
         
     # 2. Call LLM
@@ -122,8 +121,7 @@ async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
             new_gap = KnowledgeGap(
                 course_id=course_id,
                 topic=gap_data.get("topic", "Unknown"),
-                frequency=gap_data.get("frequency", 1),
-                gap_score=gap_data.get("gap_score", 5.0)
+                frequency=gap_data.get("frequency", 1)
             )
             db.add(new_gap)
             saved_count += 1

@@ -11,7 +11,8 @@ export default function MaterialViewerPage() {
   const searchParams = useSearchParams();
   const id = params.id as string;
   const t = searchParams.get("t");
-  
+  const highlight = searchParams.get("text") || searchParams.get("highlight");
+
   const [material, setMaterial] = useState<any>(null);
   const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -31,18 +32,18 @@ export default function MaterialViewerPage() {
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const response = await fetch(`${baseUrl}/api/materials/${id}`);
-        
+
         if (!response.ok) {
           throw new Error("Failed to fetch material details");
         }
-        
+
         const data = await response.json();
-        
+
         // Ensure URL is absolute
         if (data.url && !data.url.startsWith('http')) {
           data.url = `${baseUrl}/${data.url}`;
         }
-        
+
         setMaterial(data);
       } catch (err: any) {
         setError(err.message);
@@ -77,7 +78,7 @@ export default function MaterialViewerPage() {
           <h1 className="text-2xl font-bold text-white font-['Lexend']">Resource Unavailable</h1>
           <p className="text-white/40 max-w-md">{error || "The material you are looking for does not exist or has been removed."}</p>
         </div>
-        <button 
+        <button
           onClick={() => router.back()}
           className="px-8 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-all border border-white/5"
         >
@@ -88,16 +89,17 @@ export default function MaterialViewerPage() {
   }
 
   return (
-    <MaterialViewer 
+    <MaterialViewer
       material={{
         id: material.id,
         name: material.name,
         type: material.type,
         url: material.url,
         course_name: material.course_name
-      }} 
+      }}
       initialTimestamp={t ? parseInt(t, 10) : undefined}
       initialPage={initialPage}
+      highlightText={highlight || undefined}
       onClose={() => router.back()}
     />
   );

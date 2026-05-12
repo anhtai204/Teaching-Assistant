@@ -16,8 +16,7 @@ async def get_pending_moderation(course_id: Optional[str] = None, db: Session = 
     query = (
         db.query(ChatMessage)
         .join(ChatSession)
-        .filter((ChatMessage.is_flagged == True) | (ChatMessage.was_unanswered == True) | (ChatMessage.feedback_rating == -1))
-        .filter(ChatMessage.manual_answer == None)
+        .filter((ChatMessage.is_flagged == True) | (ChatMessage.feedback_rating == -1))
     )
     
     if course_id and course_id != "null" and course_id != "undefined":
@@ -32,7 +31,6 @@ async def get_pending_moderation(course_id: Optional[str] = None, db: Session = 
             "content": msg.content,
             "role": msg.role,
             "is_flagged": msg.is_flagged,
-            "was_unanswered": msg.was_unanswered,
             "created_at": msg.created_at,
             "course_id": str(msg.session.course_id) if msg.session else None,
             "course_name": msg.session.course.name if msg.session and msg.session.course else "Unknown Course",
@@ -53,23 +51,3 @@ async def get_pending_moderation(course_id: Optional[str] = None, db: Session = 
         for msg in pending_messages
     ]
 
-@router.post("/resolve/{message_id}")
-async def resolve_message(message_id: str, payload: dict, db: Session = Depends(get_db)):
-    """
-    Lecturer provides a manual answer to a flagged/unanswered message.
-    """
-    manual_answer = payload.get("manual_answer")
-    if not manual_answer:
-        raise HTTPException(status_code=400, detail="Manual answer is required")
-        
-    msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
-        
-    msg.manual_answer = manual_answer
-    msg.is_flagged = False  # Mark as resolved to clear from queue
-    # If it's the assistant's message we are correcting, we update it.
-    # If it was a user question that was unanswered, the manual_answer serves as the fix.
-    
-    db.commit()
-    return {"status": "success", "message": "Question resolved with manual answer"}

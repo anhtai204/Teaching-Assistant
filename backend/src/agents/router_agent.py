@@ -39,7 +39,7 @@ def get_router_llm(timeout=20):
         )
 
 _router_llm = get_router_llm().with_fallbacks([
-    ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+    ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GOOGLE_API_KEY)
 ])
 
 _MATERIAL_TERMS = (

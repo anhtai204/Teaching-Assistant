@@ -646,7 +646,6 @@ async def get_session_messages(session_id: UUID, db: Session = Depends(get_db)):
             "sources": m.sources,
             "is_flagged": m.is_flagged,
             "feedback_rating": m.feedback_rating,
-            "manual_answer": m.manual_answer,
             "created_at": m.created_at
         }
         for m in messages
@@ -937,8 +936,7 @@ async def get_roadmap(user_id: str, db: Session = Depends(get_db)):
                     "description": item.description,
                     "priority": item.priority,
                     "progress": item.progress,
-                    "status": item.status,
-                    "eta_minutes": item.eta_minutes
+                    "status": item.status
                 } for item in existing_items
             ]
         }
@@ -973,8 +971,7 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
             description=item.get("description", ""),
             priority=item.get("priority", "medium"),
             progress=item.get("progress", 0),
-            status=item.get("status", "todo"),
-            eta_minutes=item.get("eta_minutes", 30)
+            status=item.get("status", "todo")
         )
         db.add(new_item)
         saved_items.append(new_item)
@@ -990,8 +987,7 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
                 "description": item.description,
                 "priority": item.priority,
                 "progress": item.progress,
-                "status": item.status,
-                "eta_minutes": item.eta_minutes
+                "status": item.status
             } for item in saved_items
         ]
     }

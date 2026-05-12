@@ -8,7 +8,10 @@ from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.config import DEFAULT_MODEL, GOOGLE_API_KEY, OPENAI_API_KEY
 import logging
+import re
 from src.graph.state import AgentState
+from src.tools.request_tool import create_material_request_tool
+from langchain_core.messages import SystemMessage, ToolMessage
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,7 @@ def get_llm(temperature=0.1, timeout=20):
 
 # Base LLM with fallback
 _llm = get_llm().with_fallbacks([
-    ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+    ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GOOGLE_API_KEY)
 ])
 
 
@@ -69,8 +72,9 @@ def _format_context(chunks: List[dict]) -> str:
         # 2. PDF/Document Page
         elif page:
             markdown_link = f"[Nguồn: {src} (Trang {page})](/student/materials/viewer/{doc_id}?visible={is_visible}#page={page})"
-        # 3. Default
+        # 3. Text-based fragment (for MD, TXT, DOCX)
         else:
+            # Just link to the document as requested
             markdown_link = f"[Nguồn: {src}](/student/materials/viewer/{doc_id}?visible={is_visible})"
             
         lines.append(f"TÀI LIỆU SỐ {i}:\n- LINK TRÍCH DẪN BẮT BUỘC: {markdown_link}\n- NỘI DUNG: {text}")
@@ -88,7 +92,7 @@ def tutor_node(state: AgentState) -> dict:
     
     # Use lower temperature for academic grounding
     _strict_llm = get_llm(temperature=0.1, timeout=20).with_fallbacks([
-        ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+        ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GOOGLE_API_KEY)
     ])
 
     if context_text:
@@ -108,10 +112,30 @@ def tutor_node(state: AgentState) -> dict:
     # Log for debug
     logger.info("[TUTOR NODE] Final system prompt content:\n%s", rebuilt_messages[1].content if len(rebuilt_messages) > 1 else "No context message")
     
-    resp = _strict_llm.invoke(rebuilt_messages)
+    # Bind tools to the LLM
+    tools = [create_material_request_tool]
+    llm_with_tools = _strict_llm.bind_tools(tools)
     
+    resp = llm_with_tools.invoke(rebuilt_messages)
+    
+    # Handle Tool Calls
+    if resp.tool_calls:
+        new_messages = [resp]
+        for tool_call in resp.tool_calls:
+            if tool_call["name"] == "create_material_request_tool":
+                # Execute tool
+                tool_result = create_material_request_tool.invoke(tool_call["args"])
+                new_messages.append(ToolMessage(
+                    tool_call_id=tool_call["id"],
+                    content=tool_result
+                ))
+        
+        # Get final response after tool execution
+        final_resp = _strict_llm.invoke(rebuilt_messages + new_messages)
+        logger.info("[TUTOR NODE] Final LLM Response after Tool:\n%s", final_resp.content)
+        return {"messages": [final_resp]}
+
     logger.info("[TUTOR NODE] LLM Raw Response:\n%s", resp.content)
-    
     return {"messages": [resp]}
 
 # For backward compatibility if any script calls generate_answer

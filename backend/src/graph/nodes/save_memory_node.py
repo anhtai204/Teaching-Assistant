@@ -41,7 +41,7 @@ def _get_summary_llm():
         )
         # Fallback (Gemini)
         fallback = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             google_api_key=GOOGLE_API_KEY,
             temperature=0,
         )

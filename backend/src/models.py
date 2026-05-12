@@ -120,8 +120,6 @@ class ChatMessage(Base):
     is_flagged = Column(Boolean, default=False)
     feedback_rating = Column(Integer, nullable=True) # 1 for Up, -1 for Down
     feedback_comment = Column(Text, nullable=True)
-    was_unanswered = Column(Boolean, default=False)
-    manual_answer = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -135,7 +133,6 @@ class KnowledgeGap(Base):
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
     topic = Column(String, nullable=False)
     frequency = Column(Integer, default=1)
-    gap_score = Column(Float, default=0.0)
     metadata_json = Column("metadata", JSONB, default={})
     last_detected_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -144,12 +141,12 @@ class RoadmapItem(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
     topic = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     priority = Column(String, default="medium")
     progress = Column(Integer, default=0)
     status = Column(String, default="todo")
-    eta_minutes = Column(Integer, default=30)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

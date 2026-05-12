@@ -111,12 +111,14 @@ def load_documents():
     return docs
 
 def chunk_documents(documents):
+    # Enhanced separators for better semantic grouping
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n# ", "\n## ", "\n### ", "\n#### ", "\n\n", "\n", ". ", " ", ""]
     )
     chunks = splitter.split_documents(documents)
-    print(f"Split into {len(chunks)} chunks")
+    print(f"Split into {len(chunks)} chunks using semantic separators.")
     return chunks
 
 def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: Session):
@@ -130,10 +132,11 @@ def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: 
         ext = file_name.split('.')[-1].lower()
         print(f"Processing file: {file_name} (Type: {ext})")
         
+        target_pdf = file_path # Initialize for return logic
         docs_to_chunk = []
         
+        # 1. Handle Media (Whisper)
         if ext in ['mp3', 'mp4', 'wav', 'm4a', 'flac']:
-            # 1. Handle Media (Whisper)
             content = transcribe_with_whisper(file_path)
             docs_to_chunk.append(LCDocument(
                 page_content=content,
@@ -144,37 +147,54 @@ def ingest_file(file_path: str, document_id: str, course_id: Optional[str], db: 
                     "document_id": str(document_id)
                 }
             ))
-        elif ext in ['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'md']:
-            # 2. Handle PDF and all text-based files (Standardize to PDF for Page-Level)
-            target_pdf = file_path
-            if ext != 'pdf':
-                converted_pdf = convert_office_to_pdf(file_path)
-                if converted_pdf:
-                    target_pdf = converted_pdf
-                else:
-                    # Fallback to MarkItDown for TXT/MD if conversion fails
-                    print(f"⚠️ Fallback to Markdown for {file_name}")
-                    result = md.convert(file_path)
-                    docs_to_chunk.append(LCDocument(
-                        page_content=result.text_content,
-                        metadata={"source": file_name, "file_path": file_path, "format": ext, "document_id": str(document_id)}
-                    ))
             
-            if ext == 'pdf' or (ext != 'pdf' and target_pdf != file_path):
-                print(f"Loading {os.path.basename(target_pdf)} with PyPDFLoader...")
-                loader = PyPDFLoader(target_pdf)
-                pages = loader.load()
-                for p in pages:
-                    p.metadata.update({
-                        "source": file_name,
-                        "file_path": file_path,
-                        "format": ext,
-                        "document_id": str(document_id),
-                        "page": p.metadata.get("page", 0) + 1 # PyPDF is 0-indexed
-                    })
-                docs_to_chunk.extend(pages)
+        # 2. Handle Markdown and Text directly (Native formats)
+        elif ext in ['md', 'txt']:
+            print(f"Reading {file_name} directly...")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            docs_to_chunk.append(LCDocument(
+                page_content=content,
+                metadata={
+                    "source": file_name,
+                    "file_path": file_path,
+                    "format": ext,
+                    "document_id": str(document_id)
+                }
+            ))
+
+        # 3. Handle Office documents via MarkItDown (Semantic extraction)
+        elif ext in ['docx', 'pptx', 'xlsx']:
+            print(f"Converting {file_name} to semantic Markdown...")
+            result = md.convert(file_path)
+            docs_to_chunk.append(LCDocument(
+                page_content=result.text_content,
+                metadata={
+                    "source": file_name,
+                    "file_path": file_path,
+                    "format": ext,
+                    "document_id": str(document_id)
+                }
+            ))
+
+        # 4. Handle PDF (Legacy / Scanned)
+        elif ext == 'pdf':
+            print(f"Loading {file_name} with PyPDFLoader...")
+            loader = PyPDFLoader(file_path)
+            pages = loader.load()
+            for p in pages:
+                p.metadata.update({
+                    "source": file_name,
+                    "file_path": file_path,
+                    "format": ext,
+                    "document_id": str(document_id),
+                    "page": p.metadata.get("page", 0) + 1
+                })
+            docs_to_chunk.extend(pages)
+            
         else:
-            # 3. Handle Text/Markdown
+            # Fallback for unknown formats
+            print(f"⚠️ Unknown format {ext}, attempting direct conversion...")
             result = md.convert(file_path)
             docs_to_chunk.append(LCDocument(
                 page_content=result.text_content,
