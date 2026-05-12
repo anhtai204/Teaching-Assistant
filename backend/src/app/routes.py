@@ -598,6 +598,28 @@ async def upload_material(
     db: Session = Depends(get_db)
 ):
     try:
+        # --- NEW: File Size Validation for MVP (Free Tier Protection) ---
+        MAX_DOC_SIZE = 10 * 1024 * 1024  # 10MB
+        MAX_MEDIA_SIZE = 25 * 1024 * 1024 # 25MB (OpenAI Whisper limit)
+        
+        file_ext = file.filename.split('.')[-1].lower()
+        is_media = file_ext in ['mp3', 'mp4', 'wav', 'm4a', 'flac']
+        
+        # Get file size
+        file.file.seek(0, os.SEEK_END)
+        file_size = file.file.tell()
+        file.file.seek(0) # Reset to beginning for reading
+        
+        limit = MAX_MEDIA_SIZE if is_media else MAX_DOC_SIZE
+        limit_mb = 25 if is_media else 10
+        
+        if file_size > limit:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File quá lớn ({file_size/(1024*1024):.1f}MB). Giới hạn cho bản MVP là {limit_mb}MB để đảm bảo hệ thống chạy ổn định."
+            )
+        # ----------------------------------------------------------------
+
         from src.supabase_client import supabase
         
         # 1. Check for existing document
