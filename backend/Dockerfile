@@ -22,7 +22,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Pre-download Faster-Whisper model to avoid runtime downloads
