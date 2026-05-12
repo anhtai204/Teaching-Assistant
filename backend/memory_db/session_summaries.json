@@ -1,0 +1,10 @@
+{
+  "default": {
+    "summary": "- User is seeking assistance.\n- User prefers communication in Vietnamese.",
+    "updated_at": "2026-05-12T01:34:10.352917+00:00"
+  },
+  "bf519ad1-1915-4c2c-8fa5-bc23df00ea5f": {
+    "summary": "- User is engaged in the course \"AI Foundations: From Zero to Smart.\"\n- User prefers communication in Vietnamese.\n- User frequently requests content summaries and clarifications on AI topics, especially RAG.\n- User is interested in understanding AI concepts and techniques, specifically RAG and its components: Ingestion and Retrieval.\n- User has expressed a need for concise information, as indicated by multiple requests for file summaries.\n- Recent interactions include repeated greetings in both Vietnamese and English, indicating openness to bilingual communication.\n- User has inquired about study tips, focusing on effective learning strategies.\n- User is actively seeking to deepen their understanding of AI-related topics.",
+    "updated_at": "2026-05-12T08:08:43.181129+00:00"
+  }
+}

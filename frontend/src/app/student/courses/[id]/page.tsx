@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/FormElements";
 import { Button } from "@/components/ui/Button";
 import { UserMenu } from "@/components/UserMenu";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api";
 
 interface Material {
   id: string;
@@ -37,8 +38,7 @@ export default function StudentCourseWorkspace() {
 
   const fetchCourseData = async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses`);
+      const response = await apiFetch(`/api/courses`);
       if (response.ok) {
         const data = await response.json();
         const found = data.find((c: any) => c.id === courseId);
@@ -52,14 +52,13 @@ export default function StudentCourseWorkspace() {
   const fetchMaterials = async () => {
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/student/courses/${courseId}/materials`);
+      const response = await apiFetch(`/api/student/courses/${courseId}/materials`);
       if (response.ok) {
         const data = await response.json();
         // Ensure URLs are absolute pointing to the backend
         const formattedData = data.map((m: any) => ({
           ...m,
-          url: m.url.startsWith('http') ? m.url : `${baseUrl}/${m.url}`
+          url: m.url.startsWith('http') ? m.url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/${m.url}`
         }));
         setMaterials(formattedData);
       }

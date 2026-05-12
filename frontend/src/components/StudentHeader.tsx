@@ -3,7 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, LayoutDashboard, BookOpen, Clock } from "lucide-react";
+import { GraduationCap, LayoutDashboard, BookOpen, Clock, Sparkles } from "lucide-react";
+import { Button } from "./ui/Button";
 import { UserMenu } from "./UserMenu";
 
 export const StudentHeader = () => {
@@ -49,6 +50,13 @@ export const StudentHeader = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <Link href="/student/chat">
+            <Button variant="outline" className="hidden sm:flex items-center gap-2 border-indigo-100 dark:border-white/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 font-bold shadow-sm px-4 h-10">
+              <Sparkles className="w-4 h-4" />
+              Chat with AI
+            </Button>
+          </Link>
+          <div className="h-6 w-[1px] bg-slate-100 dark:bg-white/5 hidden sm:block mx-1" />
           <UserMenu />
         </div>
       </div>

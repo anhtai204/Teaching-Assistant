@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api";
 
 interface Material {
   id: string;
@@ -61,10 +62,9 @@ function MaterialsContent() {
 
   const fetchCourses = async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const lecturerId = (session?.user as any)?.id;
-      const url = lecturerId ? `${baseUrl}/api/courses?lecturer_id=${lecturerId}` : `${baseUrl}/api/courses`;
-      const response = await fetch(url);
+      const url = lecturerId ? `/api/courses?lecturer_id=${lecturerId}` : `/api/courses`;
+      const response = await apiFetch(url);
       if (response.ok) {
         const data = await response.json();
         setCourses(data);
@@ -98,8 +98,7 @@ function MaterialsContent() {
   const fetchMaterials = async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      let url = `${baseUrl}/api/materials?`;
+      let url = `/api/materials?`;
 
       if (courseId) {
         url += `course_id=${courseId}`;
@@ -110,7 +109,7 @@ function MaterialsContent() {
         return;
       }
 
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (response.ok) {
         const data = await response.json();
         setMaterials(data);
@@ -133,9 +132,8 @@ function MaterialsContent() {
     formData.append("file", file);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const lecturerId = (session?.user as any)?.id;
-      let uploadUrl = `${baseUrl}/api/materials/upload`;
+      let uploadUrl = `/api/materials/upload`;
       
       const queryParams = new URLSearchParams();
       const targetCourseId = courseId || selectedCourseId;
@@ -146,7 +144,7 @@ function MaterialsContent() {
         uploadUrl += `?${queryParams.toString()}`;
       }
       
-      const response = await fetch(uploadUrl, {
+      const response = await apiFetch(uploadUrl, {
         method: "POST",
         body: formData,
       });
@@ -167,8 +165,7 @@ function MaterialsContent() {
 
   const handleAssignCourse = async (documentId: string, targetCourseId: string) => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/${documentId}/link?course_id=${targetCourseId}`, {
+      const response = await apiFetch(`/api/materials/${documentId}/link?course_id=${targetCourseId}`, {
         method: "POST",
       });
 
@@ -187,8 +184,7 @@ function MaterialsContent() {
     }
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/${documentId}/rename?new_name=${encodeURIComponent(newName)}`, {
+      const response = await apiFetch(`/api/materials/${documentId}/rename?new_name=${encodeURIComponent(newName)}`, {
         method: "PATCH",
       });
 
@@ -215,8 +211,7 @@ function MaterialsContent() {
 
   const handleToggleVisibility = async (id: string) => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/materials/${id}/visibility`, {
+      const response = await apiFetch(`/api/materials/${id}/visibility`, {
         method: "PATCH",
       });
 
@@ -235,8 +230,7 @@ function MaterialsContent() {
         label: "Xác nhận Xóa",
         onClick: async () => {
           try {
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const response = await fetch(`${baseUrl}/api/materials/${id}`, {
+            const response = await apiFetch(`/api/materials/${id}`, {
               method: "DELETE",
             });
 
@@ -460,8 +454,7 @@ function MaterialsContent() {
                                             label: "Gỡ ngay",
                                             onClick: async () => {
                                               try {
-                                                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                                                const res = await fetch(`${baseUrl}/api/materials/${m.id}/link?course_id=${linkedCourseId}`, { method: 'DELETE' });
+                                                const res = await apiFetch(`/api/materials/${m.id}/link?course_id=${linkedCourseId}`, { method: 'DELETE' });
                                                 if (res.ok) {
                                                   toast.success(`Đã gỡ khỏi khóa học ${name}`);
                                                   fetchMaterials(false);
@@ -545,8 +538,7 @@ function MaterialsContent() {
                                   action: {
                                     label: "Gỡ ngay",
                                     onClick: async () => {
-                                      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                                      const res = await fetch(`${baseUrl}/api/materials/${m.id}/link?course_id=${courseId}`, { method: 'DELETE' });
+                                      const res = await apiFetch(`/api/materials/${m.id}/link?course_id=${courseId}`, { method: 'DELETE' });
                                       if (res.ok) {
                                         toast.success("Đã gỡ khỏi khóa học.");
                                         fetchMaterials(false);

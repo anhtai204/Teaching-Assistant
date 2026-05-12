@@ -66,7 +66,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    lecturer_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     name = Column(String, nullable=False)
     file_type = Column(String, nullable=False) # 'pdf', 'slide', 'video', 'transcript'
     storage_url = Column(String, nullable=False)
@@ -99,7 +99,7 @@ class ChatSession(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
-    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
     title = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_message_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -122,6 +122,7 @@ class ChatMessage(Base):
     feedback_comment = Column(Text, nullable=True)
     was_unanswered = Column(Boolean, default=False)
     manual_answer = Column(Text, nullable=True)
+    attached_files = Column(JSONB, default=[]) # Metadata about files attached to this message
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

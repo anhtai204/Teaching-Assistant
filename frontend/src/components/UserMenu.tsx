@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Card } from "./ui/FormElements";
 import { Button } from "./ui/Button";
+import { apiFetch } from "@/lib/api";
 
 export const UserMenu = () => {
   const { data: session } = useSession();
@@ -43,8 +44,7 @@ export const UserMenu = () => {
 
     setStatus("loading");
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${baseUrl}/api/auth/change-password`, {
+      const response = await apiFetch(`/api/auth/change-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

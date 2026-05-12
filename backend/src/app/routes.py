@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
+from fastapi import APIRouter, HTTPException, Depends, File, Form, UploadFile
 from uuid import UUID
 from fastapi.responses import StreamingResponse
 import shutil
@@ -15,6 +15,7 @@ from src.memory.memory_store import append_conversation_turn
 from src.utils.security import generate_enrollment_code
 from src.utils.user_service import get_user_profile_sync
 from src.roadmap.roadmap_service import generate_roadmap_with_llm
+from src.utils.auth_middleware import require_auth
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None # Will create new if None
     user_id: str = "default"
     course_id: Optional[str] = None
+    file_ids: Optional[List[str]] = None
 
 class RegisterRequest(BaseModel):
     email: str
@@ -75,7 +77,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return {"message": "User registered successfully", "user_id": str(new_user.id)}
 
-@router.post("/api/auth/change-password")
+@router.post("/api/auth/change-password", dependencies=[Depends(require_auth)])
 async def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == request.user_id).first()
     if not user:
@@ -116,7 +118,7 @@ async def get_student_courses(student_id: UUID, db: Session = Depends(get_db)):
         for course in user.enrolled_courses
     ]
 
-@router.post("/api/courses/enroll")
+@router.post("/api/courses/enroll", dependencies=[Depends(require_auth)])
 async def enroll_course(request: CourseEnroll, db: Session = Depends(get_db)):
     """Enrolls a student in a course using an enrollment code."""
     course = db.query(Course).filter(Course.enrollment_code == request.enrollment_code).first()
@@ -157,7 +159,7 @@ async def get_courses(lecturer_id: Optional[str] = None, db: Session = Depends(g
         } for c in courses
     ]
 
-@router.post("/api/courses")
+@router.post("/api/courses", dependencies=[Depends(require_auth)])
 async def create_course(request: CourseCreate, db: Session = Depends(get_db)):
     print(f"DEBUG: Creating course with data: {request.dict()}")
     # Check if course code exists
@@ -197,7 +199,7 @@ async def get_course_students(course_id: str, db: Session = Depends(get_db)):
         } for s in course.students
     ]
 
-@router.delete("/api/courses/{course_id}/students/{student_id}")
+@router.delete("/api/courses/{course_id}/students/{student_id}", dependencies=[Depends(require_auth)])
 async def remove_student(course_id: str, student_id: str, db: Session = Depends(get_db)):
     statement = course_enrollments.delete().where(
         course_enrollments.c.course_id == course_id,
@@ -211,7 +213,7 @@ async def remove_student(course_id: str, student_id: str, db: Session = Depends(
         
     return {"message": "Student removed successfully"}
 
-@router.delete("/api/materials/{document_id}")
+@router.delete("/api/materials/{document_id}", dependencies=[Depends(require_auth)])
 async def delete_material(document_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -253,7 +255,7 @@ async def delete_material(document_id: str, db: Session = Depends(get_db)):
         print(f"[DELETE] Final fallback error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.patch("/api/materials/{document_id}/visibility")
+@router.patch("/api/materials/{document_id}/visibility", dependencies=[Depends(require_auth)])
 async def toggle_visibility(document_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -285,7 +287,7 @@ async def toggle_visibility(document_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Visibility updated", "is_visible": doc.is_visible}
 
-@router.patch("/api/materials/{document_id}/rename")
+@router.patch("/api/materials/{document_id}/rename", dependencies=[Depends(require_auth)])
 async def rename_document(document_id: str, new_name: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -295,7 +297,7 @@ async def rename_document(document_id: str, new_name: str, db: Session = Depends
     db.commit()
     return {"message": "Document renamed successfully", "new_name": new_name}
 
-@router.patch("/api/materials/{document_id}/course")
+@router.patch("/api/materials/{document_id}/course", dependencies=[Depends(require_auth)])
 async def update_document_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
@@ -342,7 +344,7 @@ async def get_material_details(document_id: UUID, db: Session = Depends(get_db))
         "course_id": str(doc.course_id)
     }
 
-@router.patch("/api/courses/{course_id}/settings")
+@router.patch("/api/courses/{course_id}/settings", dependencies=[Depends(require_auth)])
 async def update_course_settings(course_id: str, request: CourseSettingsUpdate, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
@@ -402,6 +404,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             user_id=request.user_id,
             session_id=str(session.id) if session else "default",
             course_id=request.course_id or "default",
+            file_ids=request.file_ids,
             user_profile=profile
         )
 
@@ -437,6 +440,7 @@ async def chat_stream(
     course_id: str,
     user_id: str = "default",
     session_id: Optional[str] = None,
+    file_ids: Optional[str] = None, # JSON string of list
     db: Session = Depends(get_db)
 ):
     """
@@ -451,18 +455,32 @@ async def chat_stream(
         # Create new session
         session = ChatSession(
             student_id=user_id,
-            course_id=course_id,
+            course_id=course_id if course_id != "default" else None,
             title=message[:50]
         )
         db.add(session)
         db.commit()
         db.refresh(session)
 
-    # 2. Save User Message
+    # 2. Save User Message with attached files if any
+    parsed_file_ids = []
+    attached_files_meta = []
+    if file_ids:
+        try:
+            import json
+            parsed_file_ids = json.loads(file_ids)
+            # Fetch names for these files
+            from src.models import Document
+            docs = db.query(Document).filter(Document.id.in_(parsed_file_ids)).all()
+            attached_files_meta = [{"id": str(d.id), "name": d.name} for d in docs]
+        except:
+            pass
+
     user_msg = ChatMessage(
         session_id=session.id,
         role="user",
-        content=message
+        content=message,
+        attached_files=attached_files_meta
     )
     db.add(user_msg)
     db.commit()
@@ -474,11 +492,15 @@ async def chat_stream(
         full_content = ""
         metadata = {}
         
+        # Parse file_ids if present (already parsed above, but keep for astream_agent call)
+        # We reuse parsed_file_ids from outer scope
+
         async for chunk in astream_agent(
             user_input=message,
             user_id=user_id,
             session_id=session_id_str,
             course_id=course_id,
+            file_ids=parsed_file_ids,
             user_profile=profile
         ):
             if chunk.startswith("data: "):
@@ -490,7 +512,7 @@ async def chat_stream(
                         if data.get("type") == "token":
                             full_content += data.get("content", "")
                         elif data.get("type") == "metadata":
-                            metadata = data.get("metadata", {})
+                            metadata = data # The whole chunk contains sources and chunks
                     except Exception:
                         pass
             yield chunk
@@ -534,17 +556,23 @@ async def chat_stream(
     )
 
 @router.get("/api/chat/sessions")
-async def get_chat_sessions(student_id: UUID, course_id: Optional[UUID] = None, db: Session = Depends(get_db)):
+async def get_chat_sessions(student_id: UUID, course_id: Optional[str] = None, db: Session = Depends(get_db)):
     # Validate UUID format to avoid SQL errors
+    # Normalise sentinel values the frontend may send
+    _SKIP_VALUES = {"default", "null", "undefined", ""}
     query = db.query(ChatSession).filter(ChatSession.student_id == student_id)
-    if course_id:
+    if course_id and course_id not in _SKIP_VALUES:
         query = query.filter(ChatSession.course_id == course_id)
+    elif course_id == "default":
+        # Global chat sessions have course_id = None
+        query = query.filter(ChatSession.course_id == None)
+        
     sessions = query.order_by(ChatSession.last_message_at.desc()).all()
     return [
         {
             "id": str(s.id),
             "title": s.title,
-            "course_id": str(s.course_id),
+            "course_id": str(s.course_id) if s.course_id else None,
             "created_at": s.created_at
         }
         for s in sessions
@@ -562,6 +590,7 @@ async def get_session_messages(session_id: UUID, db: Session = Depends(get_db)):
             "is_flagged": m.is_flagged,
             "feedback_rating": m.feedback_rating,
             "manual_answer": m.manual_answer,
+            "attached_files": m.attached_files,
             "created_at": m.created_at
         }
         for m in messages
@@ -631,13 +660,14 @@ async def resolve_moderation(message_id: str, request: ResolveRequest, db: Sessi
     db.commit()
     return {"message": "Resolved successfully"}
 
-@router.post("/api/materials/upload")
+@router.post("/api/materials/upload", dependencies=[Depends(require_auth)])
 async def upload_material(
-    course_id: Optional[str] = None,
-    lecturer_id: Optional[str] = None,
+    course_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None), # Renamed from lecturer_id
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+
     try:
         # --- NEW: File Size Validation for MVP ---
         MAX_DOC_SIZE = 10 * 1024 * 1024  # 10MB
@@ -657,10 +687,10 @@ async def upload_material(
 
         from src.supabase_client import supabase
         
-        # 1. Check for existing document by name and lecturer
+        # 1. Check for existing document by name and owner
         existing_doc = db.query(Document).filter(
             Document.name == file.filename,
-            Document.lecturer_id == lecturer_id
+            Document.owner_id == user_id
         ).first()
         
         if existing_doc:
@@ -689,7 +719,7 @@ async def upload_material(
         file_content = await file.read()
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
-        storage_path = f"library/{lecturer_id or 'shared'}/{safe_filename}"
+        storage_path = f"library/{user_id or 'shared'}/{safe_filename}"
         
         supabase.storage.from_("course-materials").upload(
             path=storage_path,
@@ -700,7 +730,7 @@ async def upload_material(
 
         # 3. Create Document entry
         new_doc = Document(
-            lecturer_id=lecturer_id,
+            owner_id=user_id,
             name=file.filename,
             file_type=file.filename.split('.')[-1],
             storage_url=storage_url,
@@ -736,19 +766,43 @@ async def upload_material(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/materials")
-async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[str] = None, db: Session = Depends(get_db)):
-    from src.models import course_document_links, Course
-    
+async def get_materials(
+    course_id: Optional[str] = None, 
+    user_id: Optional[str] = None, 
+    mode: str = "all", # "all", "course", "personal"
+    db: Session = Depends(get_db)
+):
     from src.models import course_document_links, Course
     
     query = db.query(Document)
     
-    if course_id:
-        # Filter by course
+    if mode == "personal" and user_id:
+        query = query.filter(Document.owner_id == user_id)
+    elif mode == "course" and course_id:
         query = query.join(course_document_links).filter(course_document_links.c.course_id == course_id)
-    elif lecturer_id:
-        # Filter by lecturer (Library view)
-        query = query.filter(Document.lecturer_id == lecturer_id)
+    elif mode == "all":
+        # Returns personal uploads + materials from all enrolled courses
+        from sqlalchemy import or_
+        from src.models import User
+        
+        access_filters = []
+        if user_id:
+            access_filters.append(Document.owner_id == user_id)
+            
+            # Enrolled courses docs
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.enrolled_courses:
+                enrolled_course_ids = [c.id for c in user.enrolled_courses]
+                # Join with document links
+                linked_doc_ids = db.query(course_document_links.c.document_id).filter(
+                    course_document_links.c.course_id.in_(enrolled_course_ids)
+                ).subquery()
+                access_filters.append(Document.id.in_(linked_doc_ids))
+        
+        if access_filters:
+            query = query.filter(or_(*access_filters))
+        else:
+            return []
     else:
         return []
 
@@ -762,13 +816,14 @@ async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[s
             "id": str(doc.id),
             "name": doc.name,
             "type": doc.file_type,
+            "url": doc.storage_url,
             "status": doc.status,
             "is_visible": doc.is_visible,
             "course_name": ", ".join(course_names) if course_names else "Unassigned"
         })
     return results
 
-@router.post("/api/materials/{document_id}/link")
+@router.post("/api/materials/{document_id}/link", dependencies=[Depends(require_auth)])
 async def link_material_to_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     from src.models import course_document_links
     # Check if exists
@@ -782,7 +837,7 @@ async def link_material_to_course(document_id: str, course_id: str, db: Session 
         db.commit()
     return {"message": "Linked successfully"}
 
-@router.delete("/api/materials/{document_id}/link")
+@router.delete("/api/materials/{document_id}/link", dependencies=[Depends(require_auth)])
 async def unlink_material_from_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
     from src.models import course_document_links
     db.execute(course_document_links.delete().where(
@@ -826,7 +881,7 @@ async def get_all_student_materials(student_id: UUID, db: Session = Depends(get_
     ).all()
     return [{'id': str(doc.id), 'name': doc.name, 'type': doc.file_type.upper(), 'url': doc.storage_url, 'is_visible': doc.is_visible} for doc in documents]
 
-@router.put('/api/courses/{course_id}')
+@router.put("/api/courses/{course_id}", dependencies=[Depends(require_auth)])
 async def update_course(course_id: str, request: CourseCreate, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:

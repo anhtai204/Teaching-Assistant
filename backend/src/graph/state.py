@@ -36,6 +36,7 @@ class AgentState(TypedDict):
     user_id: str
     session_id: str
     course_id: str
+    file_ids: Optional[List[str]]
     sources: List[str]
     memory_block: str
     summary_block: str

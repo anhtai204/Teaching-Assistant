@@ -14,13 +14,19 @@ load_dotenv()  # Load environment variables from .env file
 from src.database import SessionLocal
 from src.models import DocumentChunk, Document
 
-def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
+def retrieve_dense(
+    query: str, 
+    user_id: Optional[str] = None,
+    course_id: Optional[str] = "default", 
+    file_ids: Optional[List[str]] = None,
+    top_k: int = TOP_K_SEARCH
+) -> List[Dict[str, Any]]:
     """
     Dense retrieval: tìm kiếm theo embedding similarity trong Supabase pgvector.
     """
     db = SessionLocal()
     try:
-        from src.models import course_document_links
+        from src.models import course_document_links, User
         embedding_model = get_embedding()
         # Generate query embedding
         if hasattr(embedding_model, "embed_query"):
@@ -28,21 +34,59 @@ def retrieve_dense(query: str, course_id: str = "default", top_k: int = TOP_K_SE
         else:
             query_embedding = embedding_model.encode(query).tolist()
             
-        # Use pgvector cosine distance search
-        # Join with Document and course_document_links to respect many-to-many mapping
-        results = db.query(DocumentChunk, Document).join(Document).join(
-            course_document_links, Document.id == course_document_links.c.document_id
-        ).filter(
-            course_document_links.c.course_id == str(course_id),
+        # Build the base query
+        # We need to filter by:
+        # 1. Document visibility and status
+        # 2. (Document linked to course_id) OR (Document owner_id == user_id)
+        # 3. If file_ids provided, ONLY those files
+        
+        from sqlalchemy import or_, and_
+        
+        query_obj = db.query(DocumentChunk, Document).join(Document)
+        
+        filters = [
             Document.is_visible == True,
             Document.status == "indexed"
-        ).order_by(
+        ]
+        
+        if file_ids:
+            # If specific files are selected, only search those
+            filters.append(Document.id.in_(file_ids))
+        else:
+            # Normal search: User's own files + Enrolled courses files
+            access_filters = []
+            
+            # Own files
+            if user_id:
+                access_filters.append(Document.owner_id == str(user_id))
+            
+            # Course files
+            if course_id and course_id != "default":
+                query_obj = query_obj.join(course_document_links, Document.id == course_document_links.c.document_id)
+                access_filters.append(course_document_links.c.course_id == str(course_id))
+            elif user_id:
+                # If no specific course, but we have user_id, search ALL courses the user is enrolled in
+                from src.models import course_enrollments
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    enrolled_course_ids = [str(c.id) for c in user.enrolled_courses]
+                    if enrolled_course_ids:
+                        # Find documents linked to these courses
+                        # Using a subquery for linked document IDs
+                        linked_doc_ids = db.query(course_document_links.c.document_id).filter(
+                            course_document_links.c.course_id.in_(enrolled_course_ids)
+                        ).subquery()
+                        access_filters.append(Document.id.in_(linked_doc_ids))
+            
+            if access_filters:
+                filters.append(or_(*access_filters))
+        
+        results = query_obj.filter(and_(*filters)).order_by(
             DocumentChunk.embedding.cosine_distance(query_embedding)
         ).limit(top_k).all()
 
         chunks = []
         for chunk, doc in results:
-            # Score here is distance (0 is perfect match), we can convert to similarity if needed
             chunks.append({
                 "text": chunk.content,
                 "metadata": {
@@ -92,7 +136,13 @@ def build_bm25_index(docs: List[Dict[str, Any]]):
     BM25_INDEX = BM25Okapi(tokenized_corpus)
 
 
-def retrieve_sparse(query: str, course_id: str = "default", top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
+def retrieve_sparse(
+    query: str, 
+    user_id: Optional[str] = None,
+    course_id: Optional[str] = "default", 
+    file_ids: Optional[List[str]] = None,
+    top_k: int = TOP_K_SEARCH
+) -> List[Dict[str, Any]]:
     """
     BM25 sparse retrieval (keyword-based search)
     """
@@ -114,10 +164,48 @@ def retrieve_sparse(query: str, course_id: str = "default", top_k: int = TOP_K_S
 
     results: List[Dict[str, Any]] = []
 
+    # Get user's enrolled course IDs if needed
+    enrolled_course_ids = []
+    if not course_id or course_id == "default":
+        if user_id:
+            db = SessionLocal()
+            from src.models import User
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                enrolled_course_ids = [str(c.id) for c in user.enrolled_courses]
+            db.close()
+
     for idx in top_indices:
         metadata = BM25_METADATA[idx] or {}
-        # Filter by course_id and visibility
-        if metadata.get("course_id") == course_id and metadata.get("is_visible", True):
+        
+        # Visibility check
+        if not metadata.get("is_visible", True):
+            continue
+            
+        doc_id = metadata.get("id")
+        doc_owner_id = metadata.get("owner_id")
+        doc_course_id = metadata.get("course_id") # Note: Document might be in multiple courses now
+
+        authorized = False
+        
+        if file_ids:
+            if doc_id in file_ids:
+                authorized = True
+        else:
+            # Ownership check
+            if user_id and doc_owner_id == str(user_id):
+                authorized = True
+            
+            # Course check
+            if not authorized:
+                if course_id and course_id != "default":
+                    if doc_course_id == str(course_id):
+                        authorized = True
+                elif enrolled_course_ids:
+                    if doc_course_id in enrolled_course_ids:
+                        authorized = True
+
+        if authorized:
             results.append({
                 "text": BM25_DOCS[idx],
                 "metadata": metadata,
@@ -152,15 +240,17 @@ def build_doc_key(chunk: Dict[str, Any]) -> str:
 
 def retrieve_hybrid(
     query: str,
-    course_id: str = "default",
+    user_id: Optional[str] = None,
+    course_id: Optional[str] = "default",
+    file_ids: Optional[List[str]] = None,
     top_k: int = TOP_K_SEARCH
 ) -> List[Dict[str, Any]]:
     """
     Hybrid retrieval using Reciprocal Rank Fusion (RRF)
     """
 
-    dense_results = retrieve_dense(query, course_id=course_id, top_k=top_k * 2)
-    sparse_results = retrieve_sparse(query, course_id=course_id, top_k=top_k * 2)
+    dense_results = retrieve_dense(query, user_id=user_id, course_id=course_id, file_ids=file_ids, top_k=top_k * 2)
+    sparse_results = retrieve_sparse(query, user_id=user_id, course_id=course_id, file_ids=file_ids, top_k=top_k * 2)
 
     merged = {}
 
@@ -508,13 +598,13 @@ def rag_answer(
     # 1. RETRIEVE
     # -----------------------
     if retrieval_mode == "dense":
-        candidates = retrieve_dense(query, course_id=course_id, top_k=top_k_search)
+        candidates = retrieve_dense(query, user_id=user_id, course_id=course_id, top_k=top_k_search)
 
     elif retrieval_mode == "sparse":
-        candidates = retrieve_sparse(query, course_id=course_id, top_k=top_k_search)
+        candidates = retrieve_sparse(query, user_id=user_id, course_id=course_id, top_k=top_k_search)
 
     elif retrieval_mode == "hybrid":
-        candidates = retrieve_hybrid(query, course_id=course_id, top_k=top_k_search)
+        candidates = retrieve_hybrid(query, user_id=user_id, course_id=course_id, top_k=top_k_search)
 
     else:
         raise ValueError("Invalid retrieval_mode")

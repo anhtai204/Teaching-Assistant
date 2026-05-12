@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/FormElements";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { LecturerHeader } from "@/components/LecturerHeader";
+import { apiFetch } from "@/lib/api";
 
 interface Stats {
   total_chats: number;
@@ -43,10 +44,9 @@ function AnalyticsContent() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const [statsRes, gapsRes] = await Promise.all([
-        fetch(`${baseUrl}/api/analytics/overview?course_id=${courseId}`),
-        fetch(`${baseUrl}/api/analytics/knowledge-gaps?course_id=${courseId}`)
+        apiFetch(`/api/analytics/overview?course_id=${courseId}`),
+        apiFetch(`/api/analytics/knowledge-gaps?course_id=${courseId}`)
       ]);
 
       if (statsRes.ok && gapsRes.ok) {

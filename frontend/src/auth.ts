@@ -15,25 +15,43 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-
-        const { rows } = await db.query(
-          "SELECT * FROM users WHERE email = $1",
-          [credentials.email]
-        );
-
-        const user = rows[0];
-
-        if (user && bcrypt.compareSync(credentials.password as string, user.password_hash)) {
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.full_name,
-            role: user.role,
-          };
+        console.log("🔑 Authorize attempt for:", credentials?.email);
+        if (!credentials?.email || !credentials?.password) {
+          console.log("❌ Missing credentials");
+          return null;
         }
 
-        return null;
+        try {
+          const { rows } = await db.query(
+            "SELECT * FROM users WHERE email = $1",
+            [credentials.email]
+          );
+
+          const user = rows[0];
+          if (!user) {
+            console.log("❌ User not found in DB");
+            return null;
+          }
+
+          console.log("✅ User found, comparing passwords...");
+          const isPasswordCorrect = bcrypt.compareSync(credentials.password as string, user.password_hash);
+          
+          if (isPasswordCorrect) {
+            console.log("✨ Password correct, logging in:", user.email);
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.full_name,
+              role: user.role,
+            };
+          } else {
+            console.log("❌ Password incorrect for:", user.email);
+            return null;
+          }
+        } catch (error) {
+          console.error("🔥 Database error during authorize:", error);
+          return null;
+        }
       },
     }),
   ],
@@ -46,7 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (rows.length === 0) {
             console.log("✨ Creating new OAuth user in DB:", user.email);
             await db.query(
-              "INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, $2, $3::user_role, $4)",
+              "INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, $2, $3, $4)",
               [user.email, user.name, "student", "OAUTH_USER"]
             );
           } else {
