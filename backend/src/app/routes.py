@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
+from fastapi import APIRouter, HTTPException, Depends, File, Form, UploadFile
 from uuid import UUID
 from fastapi.responses import StreamingResponse
 import shutil
@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None # Will create new if None
     user_id: str = "default"
     course_id: Optional[str] = None
+    file_ids: Optional[List[str]] = None
 
 class RegisterRequest(BaseModel):
     email: str
@@ -402,6 +403,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             user_id=request.user_id,
             session_id=str(session.id) if session else "default",
             course_id=request.course_id or "default",
+            file_ids=request.file_ids,
             user_profile=profile
         )
 
@@ -437,6 +439,7 @@ async def chat_stream(
     course_id: str,
     user_id: str = "default",
     session_id: Optional[str] = None,
+    file_ids: Optional[str] = None, # JSON string of list
     db: Session = Depends(get_db)
 ):
     """
@@ -451,18 +454,32 @@ async def chat_stream(
         # Create new session
         session = ChatSession(
             student_id=user_id,
-            course_id=course_id,
+            course_id=course_id if course_id != "default" else None,
             title=message[:50]
         )
         db.add(session)
         db.commit()
         db.refresh(session)
 
-    # 2. Save User Message
+    # 2. Save User Message with attached files if any
+    parsed_file_ids = []
+    attached_files_meta = []
+    if file_ids:
+        try:
+            import json
+            parsed_file_ids = json.loads(file_ids)
+            # Fetch names for these files
+            from src.models import Document
+            docs = db.query(Document).filter(Document.id.in_(parsed_file_ids)).all()
+            attached_files_meta = [{"id": str(d.id), "name": d.name} for d in docs]
+        except:
+            pass
+
     user_msg = ChatMessage(
         session_id=session.id,
         role="user",
-        content=message
+        content=message,
+        attached_files=attached_files_meta
     )
     db.add(user_msg)
     db.commit()
@@ -474,11 +491,15 @@ async def chat_stream(
         full_content = ""
         metadata = {}
         
+        # Parse file_ids if present (already parsed above, but keep for astream_agent call)
+        # We reuse parsed_file_ids from outer scope
+
         async for chunk in astream_agent(
             user_input=message,
             user_id=user_id,
             session_id=session_id_str,
             course_id=course_id,
+            file_ids=parsed_file_ids,
             user_profile=profile
         ):
             if chunk.startswith("data: "):
@@ -490,7 +511,7 @@ async def chat_stream(
                         if data.get("type") == "token":
                             full_content += data.get("content", "")
                         elif data.get("type") == "metadata":
-                            metadata = data.get("metadata", {})
+                            metadata = data # The whole chunk contains sources and chunks
                     except Exception:
                         pass
             yield chunk
@@ -534,17 +555,23 @@ async def chat_stream(
     )
 
 @router.get("/api/chat/sessions")
-async def get_chat_sessions(student_id: UUID, course_id: Optional[UUID] = None, db: Session = Depends(get_db)):
+async def get_chat_sessions(student_id: UUID, course_id: Optional[str] = None, db: Session = Depends(get_db)):
     # Validate UUID format to avoid SQL errors
+    # Normalise sentinel values the frontend may send
+    _SKIP_VALUES = {"default", "null", "undefined", ""}
     query = db.query(ChatSession).filter(ChatSession.student_id == student_id)
-    if course_id:
+    if course_id and course_id not in _SKIP_VALUES:
         query = query.filter(ChatSession.course_id == course_id)
+    elif course_id == "default":
+        # Global chat sessions have course_id = None
+        query = query.filter(ChatSession.course_id == None)
+        
     sessions = query.order_by(ChatSession.last_message_at.desc()).all()
     return [
         {
             "id": str(s.id),
             "title": s.title,
-            "course_id": str(s.course_id),
+            "course_id": str(s.course_id) if s.course_id else None,
             "created_at": s.created_at
         }
         for s in sessions
@@ -562,6 +589,7 @@ async def get_session_messages(session_id: UUID, db: Session = Depends(get_db)):
             "is_flagged": m.is_flagged,
             "feedback_rating": m.feedback_rating,
             "manual_answer": m.manual_answer,
+            "attached_files": m.attached_files,
             "created_at": m.created_at
         }
         for m in messages
@@ -633,11 +661,12 @@ async def resolve_moderation(message_id: str, request: ResolveRequest, db: Sessi
 
 @router.post("/api/materials/upload")
 async def upload_material(
-    course_id: Optional[str] = None,
-    lecturer_id: Optional[str] = None,
+    course_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None), # Renamed from lecturer_id
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+
     try:
         # --- NEW: File Size Validation for MVP ---
         MAX_DOC_SIZE = 10 * 1024 * 1024  # 10MB
@@ -657,10 +686,10 @@ async def upload_material(
 
         from src.supabase_client import supabase
         
-        # 1. Check for existing document by name and lecturer
+        # 1. Check for existing document by name and owner
         existing_doc = db.query(Document).filter(
             Document.name == file.filename,
-            Document.lecturer_id == lecturer_id
+            Document.owner_id == user_id
         ).first()
         
         if existing_doc:
@@ -689,7 +718,7 @@ async def upload_material(
         file_content = await file.read()
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename)
-        storage_path = f"library/{lecturer_id or 'shared'}/{safe_filename}"
+        storage_path = f"library/{user_id or 'shared'}/{safe_filename}"
         
         supabase.storage.from_("course-materials").upload(
             path=storage_path,
@@ -700,7 +729,7 @@ async def upload_material(
 
         # 3. Create Document entry
         new_doc = Document(
-            lecturer_id=lecturer_id,
+            owner_id=user_id,
             name=file.filename,
             file_type=file.filename.split('.')[-1],
             storage_url=storage_url,
@@ -736,19 +765,43 @@ async def upload_material(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/materials")
-async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[str] = None, db: Session = Depends(get_db)):
-    from src.models import course_document_links, Course
-    
+async def get_materials(
+    course_id: Optional[str] = None, 
+    user_id: Optional[str] = None, 
+    mode: str = "all", # "all", "course", "personal"
+    db: Session = Depends(get_db)
+):
     from src.models import course_document_links, Course
     
     query = db.query(Document)
     
-    if course_id:
-        # Filter by course
+    if mode == "personal" and user_id:
+        query = query.filter(Document.owner_id == user_id)
+    elif mode == "course" and course_id:
         query = query.join(course_document_links).filter(course_document_links.c.course_id == course_id)
-    elif lecturer_id:
-        # Filter by lecturer (Library view)
-        query = query.filter(Document.lecturer_id == lecturer_id)
+    elif mode == "all":
+        # Returns personal uploads + materials from all enrolled courses
+        from sqlalchemy import or_
+        from src.models import User
+        
+        access_filters = []
+        if user_id:
+            access_filters.append(Document.owner_id == user_id)
+            
+            # Enrolled courses docs
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.enrolled_courses:
+                enrolled_course_ids = [c.id for c in user.enrolled_courses]
+                # Join with document links
+                linked_doc_ids = db.query(course_document_links.c.document_id).filter(
+                    course_document_links.c.course_id.in_(enrolled_course_ids)
+                ).subquery()
+                access_filters.append(Document.id.in_(linked_doc_ids))
+        
+        if access_filters:
+            query = query.filter(or_(*access_filters))
+        else:
+            return []
     else:
         return []
 
@@ -762,6 +815,7 @@ async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[s
             "id": str(doc.id),
             "name": doc.name,
             "type": doc.file_type,
+            "url": doc.storage_url,
             "status": doc.status,
             "is_visible": doc.is_visible,
             "course_name": ", ".join(course_names) if course_names else "Unassigned"

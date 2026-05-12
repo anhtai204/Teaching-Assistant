@@ -24,6 +24,7 @@ from src.models import User
 
 import bcrypt
 
+# Triggering reload to pick up schema changes
 app = FastAPI(title="AI Teaching Assistant API")
 
 # Enable CORS for frontend

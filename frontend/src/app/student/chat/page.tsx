@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/FormElements";
 import { UserMenu } from "@/components/UserMenu";
-import { Send, Info, MessageSquare, History, ArrowLeft, Download, ExternalLink, Flag, ThumbsUp, ThumbsDown, Sparkles, X, FileText, CheckCircle2, PlusCircle, Clock, BookOpen, AlertTriangle } from "lucide-react";
+import { Send, Info, MessageSquare, History, ArrowLeft, Download, ExternalLink, Flag, ThumbsUp, ThumbsDown, Sparkles, X, FileText, CheckCircle2, PlusCircle, Clock, BookOpen, AlertTriangle, Paperclip, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -20,6 +20,7 @@ interface Message {
   is_flagged?: boolean;
   feedback_rating?: number;
   manual_answer?: string;
+  attached_files?: any[];
 }
 
 interface RoadmapItem {
@@ -52,9 +53,18 @@ function ChatContent() {
   const [roadmapItems, setRoadmapItems] = useState<RoadmapItem[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [aiStatus, setAiStatus] = useState<string>("");
   const [previewSource, setPreviewSource] = useState<any>(null);
+  
+  // File Attachment States
+  const [availableFiles, setAvailableFiles] = useState<any[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [showFileMenu, setShowFileMenu] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
 
   const fetchRoadmap = async () => {
     try {
@@ -80,7 +90,7 @@ function ChatContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        setRoadmapItems(prev => prev.map(item => 
+        setRoadmapItems(prev => prev.map(item =>
           item.id === itemId ? { ...item, progress: data.progress, status: data.status } : item
         ));
       }
@@ -104,11 +114,22 @@ function ChatContent() {
   }, [messages]);
 
   useEffect(() => {
-    if (courseId && session?.user) {
+    if (session?.user) {
       fetchCourseDetails();
       fetchSessions();
+      fetchAvailableFiles();
     }
   }, [courseId, session]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setShowFileMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const isAutoSelectDone = useRef(false);
 
@@ -161,6 +182,56 @@ function ChatContent() {
     }
   };
 
+  const fetchAvailableFiles = async () => {
+    if (!session?.user) return;
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const studentId = (session.user as any).id;
+      // Fetch both personal materials and course materials
+      const url = courseId 
+        ? `${baseUrl}/api/materials?user_id=${studentId}&course_id=${courseId}&mode=all`
+        : `${baseUrl}/api/materials?user_id=${studentId}&mode=all`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableFiles(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch available files:", error);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session?.user) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("user_id", (session.user as any).id);
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${baseUrl}/api/materials/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        fetchAvailableFiles();
+        if (data.id) {
+          setSelectedFileIds(prev => [...prev, data.id]);
+        }
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const fetchSessionMessages = async (sessionId: string) => {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -187,17 +258,24 @@ function ChatContent() {
     abortControllerRef.current = new AbortController();
 
     const currentInput = input;
-    const userMsg: Message = { role: "user", content: currentInput };
+    const userMsg: Message = { 
+      role: "user", 
+      content: currentInput,
+      attached_files: selectedFileIds.map(id => availableFiles.find(f => f.id === id)).filter(Boolean)
+    };
 
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+    setSelectedFileIds([]); // Clear selection after sending
     setIsLoading(true);
+    setAiStatus("Connecting...");
 
     try {
       const studentId = (session?.user as any)?.id || "default";
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-      const streamUrl = `${baseUrl}/api/chat/stream?message=${encodeURIComponent(currentInput)}&course_id=${courseId}&user_id=${studentId}&session_id=${currentSessionId || ""}`;
+      const fileIdsParam = selectedFileIds.length > 0 ? `&file_ids=${encodeURIComponent(JSON.stringify(selectedFileIds))}` : "";
+      const streamUrl = `${baseUrl}/api/chat/stream?message=${encodeURIComponent(currentInput)}&course_id=${courseId || "default"}&user_id=${studentId}&session_id=${currentSessionId || ""}${fileIdsParam}`;
 
       const response = await fetch(streamUrl, {
         signal: abortControllerRef.current.signal // Gắn signal để có thể hủy fetch
@@ -237,6 +315,8 @@ function ChatContent() {
               // 3. Gom logic cập nhật biến assistantMsg lại cho gọn
               if (data.type === "token") {
                 assistantMsg.content += data.content;
+              } else if (data.type === "status") {
+                setAiStatus(data.content);
               } else if (data.type === "metadata") {
                 assistantMsg.sources = data.sources;
                 assistantMsg.chunks = data.chunks;
@@ -303,7 +383,7 @@ function ChatContent() {
 
   const renderContent = (content: string, role: "user" | "assistant") => {
     const isUser = role === "user";
-    
+
     // Tin nhắn của sinh viên chỉ cần hiển thị văn bản thuần túy (Plain Text)
     if (isUser) {
       return <div className="whitespace-pre-wrap break-words text-white">{content}</div>;
@@ -312,17 +392,17 @@ function ChatContent() {
     // Tin nhắn của AI sẽ được render bằng Markdown
     return (
       <div className="prose max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:p-0 prose-pre:rounded-2xl prose-slate dark:prose-invert prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-table:border prose-table:border-slate-100 prose-th:bg-slate-50 prose-th:p-4 prose-td:p-4">
-        <ReactMarkdown 
+        <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            code({node, className, children, ...props}) {
+            code({ node, className, children, ...props }) {
 
               const match = /language-(\w+)/.exec(className || '');
               const isBlock = !!match;
               return isBlock ? (
                 <div className="relative group/code my-6">
                   <div className="absolute right-4 top-4 z-20">
-                    <button 
+                    <button
                       onClick={() => {
                         navigator.clipboard.writeText(String(children).replace(/\n$/, ''));
                       }}
@@ -385,10 +465,15 @@ function ChatContent() {
   };
 
   const ThinkingDots = () => (
-    <div className="flex gap-1.5 items-center py-2 px-1">
-      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+    <div className="flex flex-col gap-3 py-2 px-1 animate-pulse">
+      <div className="flex gap-1.5 items-center">
+        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+        <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+      </div>
+      <p className="text-[11px] font-black uppercase text-slate-400 tracking-[0.2em] animate-pulse">
+        {aiStatus || "AI is analyzing your request..."}
+      </p>
     </div>
   );
 
@@ -459,7 +544,7 @@ function ChatContent() {
                 <Sparkles className="w-3 h-3" />
                 Learning Focus
               </h3>
-              <button 
+              <button
                 onClick={async () => {
                   try {
                     const studentId = (session?.user as any)?.id || "default";
@@ -488,16 +573,15 @@ function ChatContent() {
                     )}
                   </div>
                   <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${
-                        item.status === 'done' ? "bg-green-500" : item.priority === "High" ? "bg-red-500" : item.priority === "Medium" ? "bg-amber-500" : "bg-blue-500"
-                      }`}
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ${item.status === 'done' ? "bg-green-500" : item.priority === "High" ? "bg-red-500" : item.priority === "Medium" ? "bg-amber-500" : "bg-blue-500"
+                        }`}
                       style={{ width: `${item.progress}%` }}
                     />
                   </div>
                   <div className="flex justify-end">
                     {item.status !== 'done' ? (
-                      <button 
+                      <button
                         onClick={() => handleUpdateProgress(item.id, 100)}
                         className="text-[10px] flex items-center gap-1 font-bold text-slate-400 hover:text-green-600 transition-colors"
                       >
@@ -564,7 +648,17 @@ function ChatContent() {
                     {msg.role === "assistant" && !msg.content && isLoading && i === messages.length - 1 ? (
                       <ThinkingDots />
                     ) : (
-                      <>
+                      <div className="space-y-4">
+                        {msg.attached_files && msg.attached_files.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2 pb-3 border-b border-white/20">
+                            {msg.attached_files.map((file, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 bg-white/20 px-2 py-1 rounded-lg text-[10px] font-bold">
+                                <FileText className="w-3 h-3" />
+                                <span className="truncate max-w-[150px]">{file.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {renderContent(msg.content || "", msg.role as "user" | "assistant")}
                         {msg.manual_answer && (
                           <div className="mt-6 pt-4 border-t border-amber-200 dark:border-amber-700/30">
@@ -577,7 +671,7 @@ function ChatContent() {
                             </div>
                           </div>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
 
@@ -615,28 +709,96 @@ function ChatContent() {
           </div>
         </div>
 
-        {/* Input */}
         <div className="p-8 bg-white border-t border-slate-100 shadow-[0_-10px_30px_rgba(0,0,0,0.02)] z-30">
-          <div className="max-w-4xl mx-auto relative group">
-            <textarea
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-              placeholder={`Type your question about ${course?.name || 'this course'}...`}
-              className="w-full rounded-2xl border-2 border-slate-100 bg-[#F8FAFC] px-8 py-5 pr-20 text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-8 focus:ring-blue-500/5 transition-all resize-none shadow-inner min-h-[68px] font-medium text-lg placeholder:text-slate-300"
-            />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-200 transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {isLoading ? (
-                <div className="h-6 w-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Send className="h-6 w-6" />
-              )}
-            </button>
+          <div className="max-w-4xl mx-auto space-y-4">
+            {selectedFileIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest self-center mr-2">Context:</span>
+                {selectedFileIds.map(id => {
+                  const file = availableFiles.find(f => f.id === id);
+                  return (
+                    <div key={id} className="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 border border-blue-100 dark:border-blue-500/20">
+                      <FileText className="w-3 h-3" />
+                      <span className="max-w-[120px] truncate">{file?.name || id}</span>
+                      <button onClick={() => setSelectedFileIds(prev => prev.filter(fid => fid !== id))} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="relative flex items-center gap-3">
+              <div className="relative" ref={fileMenuRef}>
+                <button 
+                  onClick={() => setShowFileMenu(!showFileMenu)} 
+                  className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-all ${selectedFileIds.length > 0 ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "bg-[#F8FAFC] text-slate-400 hover:bg-slate-100 border-2 border-slate-100"}`}
+                >
+                  <Paperclip className="w-6 h-6" />
+                </button>
+                
+                {showFileMenu && (
+                  <div className="absolute bottom-full left-0 mb-4 w-80 bg-white dark:bg-[#1A1A3A] border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-bottom-left">
+                    <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Files</h4>
+                      <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
+                        <PlusCircle className="w-3 h-3" /> Upload
+                      </button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                      {availableFiles.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400">
+                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-xs font-bold">No files available</p>
+                        </div>
+                      ) : (
+                        availableFiles.map(file => {
+                          const isSelected = selectedFileIds.includes(file.id);
+                          return (
+                            <button 
+                              key={file.id} 
+                              onClick={() => setSelectedFileIds(prev => isSelected ? prev.filter(id => id !== file.id) : [...prev, file.id])}
+                              className={`w-full text-left p-3 rounded-2xl transition-all flex items-center gap-3 ${isSelected ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" : "text-slate-600 dark:text-white/40 hover:bg-slate-50"}`}
+                            >
+                              <div className={`h-8 w-8 rounded-xl flex items-center justify-center ${isSelected ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
+                                {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold truncate">{file.name}</p>
+                                <p className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{file.course_name || "Personal"}</p>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+
+              <div className="flex-1 relative group">
+                <textarea
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+                  placeholder={`Type your question about ${course?.name || 'this course'}...`}
+                  className="w-full rounded-2xl border-2 border-slate-100 bg-[#F8FAFC] px-8 py-5 pr-20 text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-8 focus:ring-blue-500/5 transition-all resize-none shadow-inner min-h-[68px] font-medium text-lg placeholder:text-slate-300"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={isLoading || !input.trim()}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-200 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoading || isUploading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <Send className="h-6 w-6" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
           <p className="text-center text-[10px] font-bold text-slate-400 uppercase mt-4 tracking-widest">
             AI Assistant may provide inaccurate information. Always verify with course materials.

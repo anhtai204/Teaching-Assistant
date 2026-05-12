@@ -5,11 +5,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(base_dir, ".env"))
 
 # Ưu tiên DATABASE_URL (Supabase Pooler URL)
 # Fallback về POSTGRES_* vars nếu không có DATABASE_URL
 DATABASE_URL = os.getenv("DATABASE_URL")
+print(f"DATABASE_URL found in env: {DATABASE_URL[:30]}...")
 
 if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):

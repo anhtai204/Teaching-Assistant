@@ -9,6 +9,7 @@ The interactive CLI (`main()`) is preserved for local testing.
 
 import logging
 
+from typing import Optional, List
 from langchain_core.messages import HumanMessage
 
 from src.config import LOG_LEVEL
@@ -29,6 +30,7 @@ async def astream_agent(
     user_id: str = "default",
     session_id: str = "default",
     course_id: str = "default",
+    file_ids: Optional[List[str]] = None,
     user_profile: dict = None,
 ):
     """
@@ -45,6 +47,7 @@ async def astream_agent(
         "user_id": user_id,
         "session_id": session_id,
         "course_id": course_id,
+        "file_ids": file_ids,
         "sources": [],
         "memory_block": "",
         "summary_block": "",
@@ -59,23 +62,32 @@ async def astream_agent(
         # In a more complex setup, we'd use astream_events to get LLM tokens
         # For simplicity, we'll run the graph and yield tokens from the final node
         
+        node_status_map = {
+            "load_memory": "Recalling previous context...",
+            "router": "Analyzing your question...",
+            "retrieval": "Searching through materials...",
+            "tutor": "Formulating the answer...",
+            "save_memory": "Finalizing session data..."
+        }
+
         async for event in graph.astream(initial_state, {"recursion_limit": 25}, stream_mode="updates"):
+            # Check for current active node to send status
+            for node_name in event.keys():
+                if node_name in node_status_map:
+                    status_text = node_status_map[node_name]
+                    yield f"data: {{\"type\": \"status\", \"content\": \"{status_text}\"}}\n\n"
+
             # Check for retrieval results to send sources early
             if "retrieval" in event:
                 sources = event["retrieval"].get("sources", [])
                 chunks = event["retrieval"].get("context", [])
-                yield f"data: {{\"type\": \"metadata\", \"sources\": {list(sources)}, \"chunks\": {chunks}}}\n\n"
+                import json
+                yield f"data: {{\"type\": \"metadata\", \"sources\": {json.dumps(list(sources))}, \"chunks\": {json.dumps(chunks)}}}\n\n"
 
             # Check for tutor results
             if "tutor" in event:
                 final_answer = event["tutor"].get("final_answer", "")
                 if final_answer:
-                    # In a real streaming scenario with an LLM, 
-                    # we would stream tokens *from within the node*.
-                    # Since LangGraph nodes usually return the final block, 
-                    # we'll simulate token streaming for better UI experience 
-                    # or update the tutor node to stream tokens.
-                    # For now, we yield the whole answer as one chunk or simulate:
                     import json
                     words = final_answer.split(' ')
                     for word in words:
@@ -93,6 +105,7 @@ def run_agent(
     user_id: str = "default",
     session_id: str = "default",
     course_id: str = "default",
+    file_ids: Optional[List[str]] = None,
     user_profile: dict = None,
 ) -> str:
     """Run the agent synchronously and return the final answer."""
@@ -102,6 +115,7 @@ def run_agent(
         "user_id": user_id,
         "session_id": session_id,
         "course_id": course_id,
+        "file_ids": file_ids,
         "sources": [],
         "memory_block": "",
         "summary_block": "",

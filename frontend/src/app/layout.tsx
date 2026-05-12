@@ -9,12 +9,7 @@ export const metadata: Metadata = {
 
 import AuthProvider from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { Inter } from "next/font/google";
-import { cn } from "@/lib/utils";
 import { Toaster } from "sonner";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
-
 
 export default function RootLayout({
   children,
@@ -22,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)}>
+    <html lang="en">
       <body>
         <ThemeProvider>
           <AuthProvider>

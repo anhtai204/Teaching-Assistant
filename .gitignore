@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Backend specific
+backend/__pycache__/
+backend/src/__pycache__/
+backend/src/agents/__pycache__/
+backend/src/app/__pycache__/
+backend/src/rag/__pycache__/
+backend/chroma_db/
+backend/data/uploads/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+logs/
+*.log.*
+backend/logs/
+frontend/logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+coverage/
+
+# AI Agent logs (keep structure, ignore session data)
+.ai-log/*.jsonl
+.agent_log/
+
+# Temporary files
+*.tmp
+*.temp
+scratch/
+tmp/
+
+# OS
+Thumbs.db
+.DS_Store
