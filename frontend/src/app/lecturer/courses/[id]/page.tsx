@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, Input } from "@/components/ui/FormElements";
@@ -30,7 +31,9 @@ export default function CourseManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"settings" | "students" | "analytics">("settings");
+  const [activeTab, setActiveTab] = useState<"settings" | "students" | "analytics" | "requests">("settings");
+  const [requests, setRequests] = useState<any[]>([]);
+  const [responseNotes, setResponseNotes] = useState<{[key: string]: string}>({});
   const [overview, setOverview] = useState<any>(null);
   const [knowledgeGaps, setKnowledgeGaps] = useState<any[]>([]);
   const [roadmapProgress, setRoadmapProgress] = useState<any[]>([]);
@@ -52,14 +55,11 @@ export default function CourseManagement() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
       // Fetch course details
-      const courseRes = await fetch(`${baseUrl}/api/courses`);
+      const courseRes = await fetch(`${baseUrl}/api/courses/${id}`);
       if (courseRes.ok) {
-        const allCourses = await courseRes.json();
-        const found = allCourses.find((c: Course) => c.id === id);
-        if (found) {
-          setCourse(found);
-          setGreeting(found.greeting_message || "");
-        }
+        const data = await courseRes.json();
+        setCourse(data);
+        setGreeting(data.greeting_message || "");
       }
 
       // Fetch students
@@ -67,6 +67,12 @@ export default function CourseManagement() {
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         setStudents(data);
+      }
+
+      // Fetch requests
+      const requestsRes = await fetch(`${baseUrl}/api/materials/requests?course_id=${id}`);
+      if (requestsRes.ok) {
+        setRequests(await requestsRes.json());
       }
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -104,7 +110,7 @@ export default function CourseManagement() {
       });
       if (response.ok) {
         const result = await response.json();
-        alert(`Analysis complete! Found ${result.gaps_found} new knowledge gaps.`);
+        toast.success(`Phân tích hoàn tất! Đã tìm thấy ${result.gaps_found} lỗ hổng kiến thức mới.`);
         fetchAnalytics(); // Refresh data
       }
     } catch (error) {
@@ -125,7 +131,7 @@ export default function CourseManagement() {
       });
 
       if (response.ok) {
-        alert("Settings saved successfully!");
+        toast.success("Cài đặt đã được lưu thành công!");
       }
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -135,19 +141,42 @@ export default function CourseManagement() {
   };
 
   const handleRemoveStudent = async (studentId: string) => {
-    if (!confirm("Are you sure you want to remove this student from the course?")) return;
+    toast("Xác nhận xóa sinh viên khỏi khóa học?", {
+      action: {
+        label: "Xóa ngay",
+        onClick: async () => {
+          try {
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${baseUrl}/api/courses/${id}/students/${studentId}`, {
+              method: "DELETE",
+            });
 
+            if (response.ok) {
+              setStudents(students.filter(s => s.id !== studentId));
+              toast.success("Đã xóa sinh viên thành công.");
+            }
+          } catch (error) {
+            console.error("Failed to remove student:", error);
+            toast.error("Lỗi khi xóa sinh viên.");
+          }
+        }
+      }
+    });
+  };
+
+  const handleUpdateRequestStatus = async (requestId: string, newStatus: string) => {
+    const comment = responseNotes[requestId] || "";
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/api/courses/${id}/students/${studentId}`, {
-        method: "DELETE",
+      const response = await fetch(`${baseUrl}/api/materials/requests/${requestId}/status?status=${newStatus}&comment=${encodeURIComponent(comment)}`, {
+        method: "PATCH"
       });
-
       if (response.ok) {
-        setStudents(students.filter(s => s.id !== studentId));
+        toast.success(`Yêu cầu đã được cập nhật thành ${newStatus}`);
+        setRequests(requests.map(r => r.id === requestId ? { ...r, status: newStatus, lecturer_comment: comment } : r));
       }
     } catch (error) {
-      console.error("Failed to remove student:", error);
+      console.error("Failed to update request status:", error);
     }
   };
 
@@ -191,6 +220,12 @@ export default function CourseManagement() {
           >
             Analytics & Insights
           </button>
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === "requests" ? "border-brand-500 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+          >
+            Material Requests ({requests.filter(r => r.status === 'pending').length})
+          </button>
         </div>
       </div>
 
@@ -206,7 +241,7 @@ export default function CourseManagement() {
                     <span className="text-2xl font-mono font-bold text-brand-600 tracking-wider">{course.enrollment_code}</span>
                     <Button variant="ghost" size="sm" onClick={() => {
                       navigator.clipboard.writeText(course.enrollment_code);
-                      alert("Code copied!");
+                      toast.success("Đã sao chép mã đăng ký!");
                     }}>
                       Copy
                     </Button>
@@ -466,6 +501,70 @@ export default function CourseManagement() {
                 </table>
               </Card>
             </section>
+          </div>
+        )}
+
+        {activeTab === "requests" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-slate-900">Student Material Requests</h2>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Topic</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Description</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Student</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Lecturer Response</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {requests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-800">{req.topic_name}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600 italic">{req.description || "No description"}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{req.student_name}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${req.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : req.status === 'fulfilled' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {req.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {req.status === 'pending' ? (
+                            <input 
+                              type="text"
+                              placeholder="Lời nhắn cho sinh viên..."
+                              className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-brand-500"
+                              value={responseNotes[req.id] || ""}
+                              onChange={(e) => setResponseNotes({...responseNotes, [req.id]: e.target.value})}
+                            />
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">{req.lecturer_comment || "Không có phản hồi"}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {req.status === 'pending' && (
+                              <>
+                                <Button size="sm" onClick={() => handleUpdateRequestStatus(req.id, "fulfilled")}>Fulfill</Button>
+                                <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleUpdateRequestStatus(req.id, "rejected")}>Reject</Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {requests.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center text-slate-500">No requests yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         )}
       </main>

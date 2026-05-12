@@ -153,3 +153,19 @@ class RoadmapItem(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+class MaterialRequest(Base):
+    __tablename__ = "material_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"))
+    topic_name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="pending") # 'pending', 'fulfilled', 'rejected'
+    lecturer_comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    student = relationship("User")
+    course = relationship("Course")
+

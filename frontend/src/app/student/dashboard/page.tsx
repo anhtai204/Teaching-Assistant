@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Input } from "@/components/ui/FormElements";
@@ -59,13 +60,13 @@ export default function StudentDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Joined ${data.course_name} successfully!`);
+        toast.success(`Đã tham gia khóa học "${data.course_name}" thành công!`);
         setIsModalOpen(false);
         setEnrollCode("");
         fetchCourses();
       } else {
         const err = await response.json();
-        alert(err.detail || "Failed to join course");
+        toast.error(err.detail || "Không thể tham gia khóa học. Vui lòng kiểm tra lại mã.");
       }
     } catch (error) {
       console.error("Join course error:", error);

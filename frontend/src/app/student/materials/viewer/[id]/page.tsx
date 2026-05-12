@@ -13,8 +13,18 @@ export default function MaterialViewerPage() {
   const t = searchParams.get("t");
   
   const [material, setMaterial] = useState<any>(null);
+  const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Extract page from hash: #page=12
+    const hash = window.location.hash;
+    const match = hash.match(/#page=(\d+)/);
+    if (match) {
+      setInitialPage(parseInt(match[1], 10));
+    }
+  }, []);
 
   useEffect(() => {
     const fetchMaterial = async () => {
@@ -87,6 +97,7 @@ export default function MaterialViewerPage() {
         course_name: material.course_name
       }} 
       initialTimestamp={t ? parseInt(t, 10) : undefined}
+      initialPage={initialPage}
       onClose={() => router.back()}
     />
   );

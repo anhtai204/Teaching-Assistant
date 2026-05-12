@@ -27,10 +27,11 @@ interface MaterialViewerProps {
     course_name?: string;
   };
   initialTimestamp?: number;
+  initialPage?: number;
   onClose?: () => void;
 }
 
-export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, initialTimestamp, onClose }) => {
+export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, initialTimestamp, initialPage, onClose }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const renderContent = () => {
@@ -53,7 +54,7 @@ export const MaterialViewer: React.FC<MaterialViewerProps> = ({ material, initia
     }
     
     // Default to Document Viewer (PDF, etc.)
-    return <DocumentViewer url={material.url} />;
+    return <DocumentViewer url={material.url} initialPage={initialPage} />;
   };
 
   return (
@@ -283,11 +284,13 @@ const AudioViewer: React.FC<{ url: string, name: string, initialTimestamp?: numb
   );
 };
 
-const DocumentViewer: React.FC<{ url: string }> = ({ url }) => {
+const DocumentViewer: React.FC<{ url: string; initialPage?: number }> = ({ url, initialPage }) => {
+  const iframeUrl = initialPage ? `${url}#page=${initialPage}` : url;
+  
   return (
     <div className="w-full h-full bg-white relative">
       <iframe 
-        src={url} 
+        src={iframeUrl} 
         className="w-full h-full border-none"
         title="Document Viewer"
       />

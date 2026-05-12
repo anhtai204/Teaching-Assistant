@@ -1,3 +1,4 @@
+from fastapi import Query
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from uuid import UUID
 from fastapi.responses import StreamingResponse
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from src.base_agent import run_agent, astream_agent
 from src.database import get_db
-from src.models import User, Course, ChatSession, ChatMessage, Document, course_enrollments
+from src.models import User, Course, ChatSession, ChatMessage, Document, course_enrollments, MaterialRequest
 from src.rag.ingest import ingest_file
 from src.config import DOCUMENT_PATH
 from src.memory.memory_store import append_conversation_turn
@@ -91,6 +92,7 @@ async def change_password(request: ChangePasswordRequest, db: Session = Depends(
     db.commit()
     return {"message": "Password updated successfully"}
 
+
 @router.get("/api/student/{student_id}/courses")
 async def get_student_courses(student_id: UUID, db: Session = Depends(get_db)):
     """Returns all courses a specific student is enrolled in."""
@@ -156,6 +158,21 @@ async def get_courses(lecturer_id: Optional[str] = None, db: Session = Depends(g
             "greeting_message": c.greeting_message
         } for c in courses
     ]
+
+@router.get("/api/courses/{course_id}")
+async def get_course_detail(course_id: str, db: Session = Depends(get_db)):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    return {
+        "id": str(course.id),
+        "code": course.code,
+        "name": course.name,
+        "description": course.description,
+        "enrollment_code": course.enrollment_code,
+        "greeting_message": course.greeting_message
+    }
 
 @router.post("/api/courses")
 async def create_course(request: CourseCreate, db: Session = Depends(get_db)):
@@ -325,21 +342,89 @@ async def update_document_course(document_id: str, course_id: str, db: Session =
     db.commit()
     return {"message": "Document assigned to course successfully", "course_id": course_id}
 
+# --- Material Request Endpoints ---
+
+class MaterialRequestCreate(BaseModel):
+    student_id: str
+    course_id: str
+    topic_name: str
+    description: Optional[str] = None
+
+@router.post("/api/materials/request")
+async def create_material_request(request: MaterialRequestCreate, db: Session = Depends(get_db)):
+    new_request = MaterialRequest(
+        student_id=request.student_id,
+        course_id=request.course_id,
+        topic_name=request.topic_name,
+        description=request.description
+    )
+    db.add(new_request)
+    db.commit()
+    db.refresh(new_request)
+    return {"message": "Request submitted successfully", "request_id": str(new_request.id)}
+
+@router.get("/api/materials/requests")
+async def get_material_requests(
+    course_id: Optional[str] = Query(None), 
+    student_id: Optional[str] = Query(None), 
+    db: Session = Depends(get_db)
+):
+    query = db.query(MaterialRequest)
+    if course_id and course_id != "undefined":
+        query = query.filter(MaterialRequest.course_id == course_id)
+    if student_id and student_id != "undefined":
+        query = query.filter(MaterialRequest.student_id == student_id)
+    
+    requests = query.order_by(MaterialRequest.created_at.desc()).all()
+    
+    result = []
+    for r in requests:
+        try:
+            result.append({
+                "id": str(r.id),
+                "student_id": str(r.student_id),
+                "student_name": r.student.full_name if r.student else "Unknown Student",
+                "course_id": str(r.course_id),
+                "topic_name": r.topic_name,
+                "description": r.description,
+                "status": r.status,
+                "lecturer_comment": r.lecturer_comment,
+                "created_at": r.created_at
+            })
+        except Exception as e:
+            print(f"Error serializing request {r.id}: {e}")
+            continue
+            
+    return result
+
+@router.patch("/api/materials/requests/{request_id}/status")
+async def update_request_status(request_id: str, status: str, comment: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    req = db.query(MaterialRequest).filter(MaterialRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    req.status = status
+    if comment:
+        req.lecturer_comment = comment
+    db.commit()
+    return {"message": f"Status updated to {status}"}
+
 @router.get("/api/materials/{document_id}")
 async def get_material_details(document_id: UUID, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
+    course_names = [c.name for c in doc.courses]
     return {
         "id": str(doc.id),
         "name": doc.name,
-        "type": doc.file_type.upper(),
+        "type": doc.file_type.upper() if doc.file_type else "FILE",
         "url": doc.storage_url,
         "is_visible": doc.is_visible,
         "status": doc.status,
-        "course_name": doc.course.name if doc.course else "General",
-        "course_id": str(doc.course_id)
+        "course_name": ", ".join(course_names) if course_names else "Library",
+        "course_id": str(doc.courses[0].id) if doc.courses else None
     }
 
 @router.patch("/api/courses/{course_id}/settings")
@@ -588,48 +673,7 @@ async def submit_feedback(message_id: UUID, request: FeedbackRequest, db: Sessio
     db.commit()
     return {"message": "Feedback submitted"}
 
-@router.get("/api/moderation/pending")
-async def get_pending_moderation(course_id: str, db: Session = Depends(get_db)):
-    """Lecturer endpoint to see flagged messages."""
-    messages = db.query(ChatMessage).join(ChatSession).filter(
-        ChatSession.course_id == course_id,
-        (ChatMessage.is_flagged == True) | (ChatMessage.feedback_rating == -1),
-        ChatMessage.manual_answer == None
-    ).all()
-    
-    return [
-        {
-            "id": str(m.id),
-            "student_question": db.query(ChatMessage).filter(
-                ChatMessage.session_id == m.session_id, 
-                ChatMessage.created_at < m.created_at,
-                ChatMessage.role == "user"
-            ).order_by(ChatMessage.created_at.desc()).first().content if db.query(ChatMessage).filter(
-                ChatMessage.session_id == m.session_id, 
-                ChatMessage.created_at < m.created_at,
-                ChatMessage.role == "user"
-            ).first() else "Unknown Question",
-            "content": m.content,
-            "created_at": m.created_at.isoformat(),
-            "is_flagged": m.is_flagged,
-            "was_unanswered": m.was_unanswered
-        }
-        for m in messages
-    ]
 
-class ResolveRequest(BaseModel):
-    manual_answer: str
-
-@router.post("/api/moderation/resolve/{message_id}")
-async def resolve_moderation(message_id: str, request: ResolveRequest, db: Session = Depends(get_db)):
-    msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
-    msg.manual_answer = request.manual_answer
-    msg.is_flagged = False # Mark as resolved
-    db.commit()
-    return {"message": "Resolved successfully"}
 
 @router.post("/api/materials/upload")
 async def upload_material(
@@ -722,7 +766,36 @@ async def upload_material(
         with open(temp_path, "wb") as f:
             f.write(file_content)
             
-        num_chunks = ingest_file(temp_path, str(new_doc.id), course_id, db)
+        num_chunks, converted_pdf_path = ingest_file(temp_path, str(new_doc.id), course_id, db)
+        
+        # 6. If converted to PDF, upload the PDF version and update Document URL
+        if converted_pdf_path and os.path.exists(converted_pdf_path):
+            try:
+                with open(converted_pdf_path, "rb") as pdf_file:
+                    pdf_content = pdf_file.read()
+                    
+                pdf_filename = os.path.basename(converted_pdf_path)
+                pdf_storage_path = f"library/{lecturer_id or 'shared'}/{pdf_filename}"
+                
+                print(f"[SYNC] Uploading standardized PDF version: {pdf_filename}")
+                supabase.storage.from_("course-materials").upload(
+                    path=pdf_storage_path,
+                    file=pdf_content,
+                    file_options={"upsert": "true", "content-type": "application/pdf"}
+                )
+                new_pdf_url = supabase.storage.from_("course-materials").get_public_url(pdf_storage_path)
+                
+                # Update Document Record
+                new_doc.storage_url = new_pdf_url
+                new_doc.file_type = "pdf"
+                db.commit()
+                print(f"✅ Document {new_doc.id} updated to PDF version for viewing.")
+                
+                # Cleanup converted PDF
+                if os.path.exists(converted_pdf_path):
+                    os.remove(converted_pdf_path)
+            except Exception as sync_err:
+                print(f"⚠️ Warning: Failed to sync PDF version to storage: {sync_err}")
         
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -767,6 +840,7 @@ async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[s
             "course_name": ", ".join(course_names) if course_names else "Unassigned"
         })
     return results
+
 
 @router.post("/api/materials/{document_id}/link")
 async def link_material_to_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
@@ -824,7 +898,18 @@ async def get_all_student_materials(student_id: UUID, db: Session = Depends(get_
         Document.status == 'indexed',
         Document.is_visible == True
     ).all()
-    return [{'id': str(doc.id), 'name': doc.name, 'type': doc.file_type.upper(), 'url': doc.storage_url, 'is_visible': doc.is_visible} for doc in documents]
+    results = []
+    for doc in documents:
+        course_names = [c.name for c in doc.courses if c.id in course_ids]
+        results.append({
+            'id': str(doc.id), 
+            'name': doc.name, 
+            'type': doc.file_type.upper() if doc.file_type else 'FILE', 
+            'url': doc.storage_url, 
+            'is_visible': doc.is_visible,
+            'course_name': ", ".join(course_names) if course_names else "Library"
+        })
+    return results
 
 @router.put('/api/courses/{course_id}')
 async def update_course(course_id: str, request: CourseCreate, db: Session = Depends(get_db)):

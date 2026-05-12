@@ -173,10 +173,14 @@ function MaterialsContent() {
       });
 
       if (response.ok) {
+        toast.success("Đã gán tài liệu vào khóa học thành công!");
         fetchMaterials(false);
+      } else {
+        toast.error("Không thể gán tài liệu vào khóa học.");
       }
     } catch (error) {
       console.error("Assign course error:", error);
+      toast.error("Lỗi kết nối máy chủ khi gán khóa học.");
     }
   };
 
@@ -221,10 +225,15 @@ function MaterialsContent() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setMaterials(prev => prev.map(m => m.id === id ? { ...m, is_visible: !m.is_visible } : m));
+        toast.success(data.is_visible ? "Tài liệu hiện đã Công khai" : "Tài liệu đã chuyển sang chế độ Ẩn");
+      } else {
+        toast.error("Không thể cập nhật trạng thái hiển thị.");
       }
     } catch (error) {
       console.error("Toggle visibility error:", error);
+      toast.error("Lỗi kết nối khi cập nhật hiển thị.");
     }
   };
 

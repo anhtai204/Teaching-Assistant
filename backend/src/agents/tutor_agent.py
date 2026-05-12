@@ -55,16 +55,21 @@ def _format_context(chunks: List[dict]) -> str:
     for i, c in enumerate(chunks, start=1):
         meta = c.get("metadata") or {}
         src = meta.get("source", "unknown")
-        doc_id = meta.get("id", "")
+        doc_id = meta.get("document_id") or meta.get("id", "")
         is_visible = meta.get("is_visible", True)
-        text = c.get('text', '')
+        text = c.get('content') or c.get('text', '')
+        page = meta.get("page")
         
-        # Tìm timestamp đầu tiên trong chunk nếu có
+        # Determine the anchor/label
+        # 1. Video Timestamp
         match = re.search(r'\[t=(\d+)s\]', text)
-        
         if match and src.lower().endswith(('.mp4', '.mp3', '.mov', '.wav', '.m4a', '.webm')):
             t_sec = match.group(1)
             markdown_link = f"[Nguồn: {src} (tại {t_sec}s)](/student/materials/viewer/{doc_id}?visible={is_visible}&t={t_sec})"
+        # 2. PDF/Document Page
+        elif page:
+            markdown_link = f"[Nguồn: {src} (Trang {page})](/student/materials/viewer/{doc_id}?visible={is_visible}#page={page})"
+        # 3. Default
         else:
             markdown_link = f"[Nguồn: {src}](/student/materials/viewer/{doc_id}?visible={is_visible})"
             
@@ -76,13 +81,9 @@ def _format_context(chunks: List[dict]) -> str:
 def tutor_node(state: AgentState) -> dict:
     """Generate a flexible, grounded tutoring answer for the graph."""
     
-    # Context messages (contains the personalized prompt from load_memory_node)
-    # The personalized prompt is at messages[0]
     base_messages = state["messages"]
     context_text = _format_context(state.get("context", []))
     
-    # We keep it simple: Use the messages from load_memory_node
-    # If we have course context, we append it as a system message to guide the answer.
     rebuilt_messages = list(base_messages)
     
     # Use lower temperature for academic grounding
@@ -93,11 +94,14 @@ def tutor_node(state: AgentState) -> dict:
     if context_text:
         from langchain_core.messages import SystemMessage
         rebuilt_messages.insert(1, SystemMessage(content=(
-            "BẠN ĐANG TRONG CHẾ ĐỘ 'KIẾM CHỨNG TÀI LIỆU'. CHỈ ĐƯỢC SỬ DỤNG DỮ LIỆU DƯỚI ĐÂY:\n\n"
-            "QUY TẮC TRÍCH DẪN BẮT BUỘC (SỐNG CÒN):\n"
-            "1. TẤT CẢ các câu khẳng định lấy từ tài liệu PHẢI có link trích dẫn ngay sau dấu chấm câu.\n"
-            "2. Tuyệt đối KHÔNG tự bịa ra link. Hãy COPY Y NGUYÊN chuỗi ở mục `LINK TRÍCH DẪN BẮT BUỘC` của tài liệu tương ứng và dán vào cuối câu trả lời.\n\n"
-            f"--- DANH SÁCH TÀI LIỆU ---\n{context_text}\n--- HẾT TÀI LIỆU ---"
+            "BẠN ĐANG TRONG CHẾ ĐỘ 'HỖ TRỢ HỌC TẬP CHÍNH XÁC'. CHỈ ĐƯỢC SỬ DỤNG DỮ LIỆU DƯỚI ĐÂY ĐỂ TRẢ LỜI:\n\n"
+            "QUY TẮC TRÍCH DẪN (QUAN TRỌNG NHẤT):\n"
+            "1. Mọi thông tin bạn lấy từ tài liệu PHẢI được theo sau bởi 'LINK TRÍCH DẪN BẮT BUỘC' tương ứng.\n"
+            "2. Đặt link trích dẫn ngay sau ý văn hoặc cuối câu. Ví dụ: 'Định thức ma trận là... [Nguồn: Slide 1 (Trang 5)](...)'.\n"
+            "3. Nếu thông tin đến từ Video, hãy đảm bảo link có chứa thông tin thời gian (t=...).\n"
+            "4. Giữ phong cách giảng dạy nhiệt tình, dễ hiểu nhưng phải cực kỳ trung thành với nguồn tin.\n"
+            "5. NẾU THÔNG TIN KHÔNG CÓ TRONG DỮ LIỆU TRÊN: Hãy xin lỗi và đề xuất sinh viên gửi 'Yêu cầu tài liệu' tới giảng viên. Bạn có thể tự thực hiện việc này nếu sinh viên đồng ý.\n\n"
+            f"--- KHO TRI THỨC CỦA KHÓA HỌC ---\n{context_text}\n--- HẾT TRI THỨC ---"
         )))
 
 

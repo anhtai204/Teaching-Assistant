@@ -59,24 +59,25 @@ async def astream_agent(
         # In a more complex setup, we'd use astream_events to get LLM tokens
         # For simplicity, we'll run the graph and yield tokens from the final node
         
+        import json
         async for event in graph.astream(initial_state, {"recursion_limit": 25}, stream_mode="updates"):
             # Check for retrieval results to send sources early
             if "retrieval" in event:
                 sources = event["retrieval"].get("sources", [])
                 chunks = event["retrieval"].get("context", [])
-                yield f"data: {{\"type\": \"metadata\", \"sources\": {list(sources)}, \"chunks\": {chunks}}}\n\n"
+                # Use proper JSON serialization for complex objects
+                metadata_str = json.dumps({
+                    "type": "metadata", 
+                    "sources": list(sources), 
+                    "chunks": chunks
+                }, default=str)
+                yield f"data: {metadata_str}\n\n"
 
             # Check for tutor results
             if "tutor" in event:
                 final_answer = event["tutor"].get("final_answer", "")
                 if final_answer:
-                    # In a real streaming scenario with an LLM, 
-                    # we would stream tokens *from within the node*.
-                    # Since LangGraph nodes usually return the final block, 
-                    # we'll simulate token streaming for better UI experience 
-                    # or update the tutor node to stream tokens.
-                    # For now, we yield the whole answer as one chunk or simulate:
-                    import json
+                    # Stream tokens (words) to the UI
                     words = final_answer.split(' ')
                     for word in words:
                         chunk_str = json.dumps({"type": "token", "content": f"{word} "})
