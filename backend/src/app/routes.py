@@ -113,10 +113,13 @@ async def get_student_courses(student_id: UUID, db: Session = Depends(get_db)):
             "id": str(course.id),
             "name": course.name,
             "code": course.code,
-            "description": course.description
+            "description": course.description,
+            "instructor_name": course.lecturer.full_name if course.lecturer else "N/A",
+            "document_count": len(course.documents)
         }
         for course in user.enrolled_courses
     ]
+
 
 @router.post("/api/courses/enroll")
 async def enroll_course(request: CourseEnroll, db: Session = Depends(get_db)):

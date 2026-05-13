@@ -37,7 +37,7 @@ export const StudentHeader = () => {
                   href={item.href}
                   className={`flex items-center gap-2 transition-all ${isActive
                       ? "text-indigo-600 dark:text-indigo-400"
-                      : "text-slate-500 dark:text-white/40 hover:text-indigo-600 dark:hover:text-indigo-400"
+                      : "text-slate-500 dark:text-white/60 hover:text-indigo-600 dark:hover:text-indigo-400"
                     }`}
                 >
                   <Icon className="w-4 h-4" />

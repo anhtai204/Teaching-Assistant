@@ -14,6 +14,9 @@ interface Course {
   id: string;
   name: string;
   code: string;
+  description?: string;
+  instructor_name?: string;
+  document_count?: number;
 }
 
 export default function StudentDashboard() {
@@ -22,6 +25,7 @@ export default function StudentDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enrollCode, setEnrollCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
   useEffect(() => {
     if (session?.user) {
@@ -31,6 +35,7 @@ export default function StudentDashboard() {
 
   const fetchCourses = async () => {
     if (!session?.user) return;
+    setIsLoadingCourses(true);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const studentId = (session.user as any).id;
@@ -41,6 +46,8 @@ export default function StudentDashboard() {
       }
     } catch (error) {
       console.error("Failed to fetch courses:", error);
+    } finally {
+      setIsLoadingCourses(false);
     }
   };
 
@@ -116,39 +123,74 @@ export default function StudentDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {courses.map((course) => (
-                <Link key={course.id} href={`/student/courses/${course.id}`} className="group">
-                  <Card className="p-8 h-full flex flex-col justify-between border-slate-100 hover:border-blue-200 shadow-sm hover:shadow-xl hover:-translate-y-1 duration-300 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-[100px] -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500" />
-
-                    <div className="relative z-10 space-y-4">
-                      <div className="bg-blue-100 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-md w-fit uppercase tracking-wider">
-                        {course.code}
+              {isLoadingCourses ? (
+                // Skeleton Loader
+                [1, 2].map((i) => (
+                  <Card key={i} className="p-8 h-64 border-slate-100 shadow-sm animate-pulse">
+                    <div className="space-y-4">
+                      <div className="h-4 w-16 bg-slate-100 dark:bg-white/5 rounded" />
+                      <div className="h-8 w-3/4 bg-slate-100 dark:bg-white/5 rounded" />
+                      <div className="space-y-2">
+                        <div className="h-3 w-full bg-slate-100 dark:bg-white/5 rounded" />
+                        <div className="h-3 w-5/6 bg-slate-100 dark:bg-white/5 rounded" />
                       </div>
-                      <h4 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight">
-                        {course.name}
-                      </h4>
                     </div>
-
-                    <div className="pt-10 flex justify-between items-center relative z-10 border-t border-slate-50 mt-auto">
-                      <span className="text-sm font-bold text-slate-400 group-hover:text-blue-600 transition-colors flex items-center gap-1">
-                        Go to class <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
-                      </span>
-                      <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:rotate-45 transition-all duration-300">
-                        <Plus className="h-5 w-5" />
-                      </div>
+                    <div className="mt-auto pt-10 flex justify-between">
+                      <div className="h-4 w-24 bg-slate-100 dark:bg-white/5 rounded" />
+                      <div className="h-10 w-10 bg-slate-100 dark:bg-white/5 rounded-xl" />
                     </div>
                   </Card>
-                </Link>
-              ))}
-              {courses.length === 0 && (
-                <div className="col-span-full py-24 text-center bg-white border-2 border-dashed border-slate-200 rounded-3xl">
-                  <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Plus className="w-10 h-10 text-slate-300" />
+                ))
+              ) : (
+                courses.map((course) => (
+                  <Link key={course.id} href={`/student/courses/${course.id}`} className="group">
+                    <Card className="p-8 h-full flex flex-col justify-between border-slate-100 hover:border-blue-200 shadow-sm hover:shadow-xl hover:-translate-y-1 duration-300 relative overflow-hidden dark:bg-[#1A1A3A] dark:hover:bg-[#23234F]">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 dark:bg-blue-500/5 rounded-bl-[100px] -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500" />
+
+                      <div className="relative z-10 space-y-4">
+                        <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-md w-fit uppercase tracking-wider">
+                          {course.code}
+                        </div>
+                        <h4 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight">
+                          {course.name}
+                        </h4>
+                        {course.description && (
+                          <p className="text-slate-500 dark:text-white/60 text-sm line-clamp-2 leading-relaxed">
+                            {course.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-4 pt-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 dark:text-white/40">
+                            <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
+                            {course.instructor_name || "Giảng viên A20"}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 dark:text-white/40">
+                            <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
+                            {course.document_count || 0} tài liệu
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-10 flex justify-between items-center relative z-10 border-t border-slate-50 dark:border-white/5 mt-auto">
+                        <span className="text-sm font-bold text-slate-400 group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                          Vào lớp học <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                        </span>
+                        <div className="h-10 w-10 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:rotate-45 transition-all duration-300">
+                          <Plus className="h-5 w-5" />
+                        </div>
+                      </div>
+                    </Card>
+                  </Link>
+                ))
+              )}
+              {!isLoadingCourses && courses.length === 0 && (
+                <div className="col-span-full py-24 text-center bg-white dark:bg-white/5 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-3xl">
+                  <div className="bg-slate-50 dark:bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Plus className="w-10 h-10 text-slate-300 dark:text-white/20" />
                   </div>
-                  <h4 className="text-xl font-bold text-slate-900 mb-2">No active classes</h4>
-                  <p className="text-slate-500 max-w-xs mx-auto mb-8 font-medium">Join your first class using the code provided by your lecturer.</p>
-                  <Button variant="outline" onClick={() => setIsModalOpen(true)}>Join your first class</Button>
+                  <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Chưa có lớp học</h4>
+                  <p className="text-slate-500 dark:text-white/60 max-w-xs mx-auto mb-8 font-medium">Tham gia lớp học đầu tiên bằng mã được giảng viên cung cấp.</p>
+                  <Button onClick={() => setIsModalOpen(true)} className="rounded-2xl px-8">Tham gia lớp ngay</Button>
                 </div>
               )}
             </div>
@@ -197,7 +239,7 @@ export default function StudentDashboard() {
           <Card className="w-full max-w-md p-10 relative shadow-2xl animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors"
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <X className="h-6 w-6" />
             </button>

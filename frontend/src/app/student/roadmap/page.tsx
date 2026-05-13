@@ -230,7 +230,7 @@ export default function StudentRoadmapPage() {
             <h1 className="text-4xl font-bold font-['Lexend'] text-slate-900 dark:text-white tracking-tight">
               Lộ trình học tập
             </h1>
-            <p className="text-slate-500 dark:text-white/40 max-w-md">
+            <p className="text-slate-500 dark:text-white/70 max-w-md">
               Được tạo dựa trên phân tích hành vi và lịch sử hỏi đáp của bạn với AI trợ giảng.
             </p>
           </div>
@@ -272,10 +272,10 @@ export default function StudentRoadmapPage() {
                 </span>
               </div>
               <div>
-                <p className="text-slate-400 dark:text-white/40 text-xs font-bold uppercase tracking-widest mb-1">Tiến độ tổng thể</p>
+                <p className="text-slate-400 dark:text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Tiến độ tổng thể</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
                   {doneCount}/{items.length}{" "}
-                  <span className="text-slate-400 dark:text-white/40 text-base font-normal">mục hoàn thành</span>
+                  <span className="text-slate-400 dark:text-white/60 text-base font-normal">mục hoàn thành</span>
                 </p>
               </div>
             </div>
@@ -283,7 +283,7 @@ export default function StudentRoadmapPage() {
             <div className="rounded-2xl bg-indigo-50 dark:bg-indigo-600/10 border border-indigo-100 dark:border-indigo-500/20 p-6 flex flex-col justify-between shadow-sm">
               <TrendingUp className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
               <div>
-                <p className="text-slate-500 dark:text-white/40 text-xs font-bold uppercase tracking-widest mb-1">Trạng thái</p>
+                <p className="text-slate-500 dark:text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Trạng thái</p>
                 <p className="text-lg font-bold text-slate-900 dark:text-white">
                   {doneCount === items.length ? "🎉 Hoàn thành!" : `${items.filter(i => i.status === "in_progress").length} đang học`}
                 </p>
@@ -296,7 +296,7 @@ export default function StudentRoadmapPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-32 space-y-4">
             <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-            <p className="text-slate-400 dark:text-white/30 text-sm font-bold uppercase tracking-widest">
+            <p className="text-slate-400 dark:text-white/60 text-sm font-bold uppercase tracking-widest">
               AI đang phân tích hành vi học tập...
             </p>
           </div>
@@ -338,7 +338,7 @@ export default function StudentRoadmapPage() {
               return (
                 <div
                   key={item.id}
-                  className={`rounded-2xl border bg-white dark:bg-white/3 p-6 transition-all hover:shadow-md dark:hover:bg-white/5 border-slate-200 dark:border-white/10 shadow-sm`}
+                  className={`rounded-2xl border bg-white dark:bg-[#1A1A3A] p-6 transition-all hover:shadow-md dark:hover:bg-[#23234F] border-slate-200 dark:border-white/10 shadow-sm`}
                 >
                   <div className="flex items-start gap-5">
                     {/* Index */}
@@ -363,7 +363,7 @@ export default function StudentRoadmapPage() {
                       </div>
 
                       {/* Description */}
-                      <p className="text-slate-500 dark:text-white/50 text-sm leading-relaxed">
+                      <p className="text-slate-500 dark:text-white/70 text-sm leading-relaxed">
                         {item.description}
                       </p>
 
@@ -372,7 +372,7 @@ export default function StudentRoadmapPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
                           {item.sources?.length > 0 && (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 flex items-center gap-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-white/50 flex items-center gap-1.5">
                                 <BookOpen className="w-3 h-3" /> Tài liệu tham khảo
                               </p>
                               <div className="flex flex-wrap gap-2">
@@ -424,10 +424,10 @@ export default function StudentRoadmapPage() {
                       {/* Progress Bar */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-white/50">
                             Tiến độ thực tế
                           </span>
-                          <span className="text-xs font-bold text-slate-500 dark:text-white/50">
+                          <span className="text-xs font-bold text-slate-500 dark:text-white/70">
                             {item.progress}%
                           </span>
                         </div>
@@ -449,7 +449,7 @@ export default function StudentRoadmapPage() {
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                               item.progress === val
                                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                                : "bg-slate-50 dark:bg-white/5 text-slate-400 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-600 dark:hover:text-white"
+                                : "bg-slate-50 dark:bg-white/5 text-slate-400 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-600 dark:hover:text-white"
                             }`}
                           >
                             {val === 0 ? "Đặt lại" : val === 100 ? "✓ Xong" : `${val}%`}

@@ -484,13 +484,17 @@ function ChatContent() {
                   <div className="flex justify-between items-center mb-2">
                     <p className={`text-xs font-bold truncate max-w-[140px] ${item.status === 'done' ? 'text-green-700 dark:text-green-400 line-through opacity-70' : 'text-slate-700 dark:text-white'}`}>{item.topic}</p>
                     {item.status !== 'done' && (
-                      <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">{item.priority}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        item.priority?.toLowerCase() === 'high' ? '!text-rose-600 !bg-rose-50 dark:!bg-rose-500/20 dark:!text-rose-400' :
+                        item.priority?.toLowerCase() === 'medium' ? '!text-amber-600 !bg-amber-50 dark:!bg-amber-500/20 dark:!text-amber-400' :
+                        '!text-blue-600 !bg-blue-50 dark:!bg-blue-500/20 dark:!text-blue-400'
+                      }`}>{item.priority}</span>
                     )}
                   </div>
                   <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
                     <div 
                       className={`h-full rounded-full transition-all duration-1000 ${
-                        item.status === 'done' ? "bg-green-500" : item.priority === "High" ? "bg-red-500" : item.priority === "Medium" ? "bg-amber-500" : "bg-blue-500"
+                        item.status === 'done' ? "bg-green-500" : item.priority?.toLowerCase() === "high" ? "bg-red-500" : item.priority?.toLowerCase() === "medium" ? "bg-amber-500" : "bg-blue-500"
                       }`}
                       style={{ width: `${item.progress}%` }}
                     />

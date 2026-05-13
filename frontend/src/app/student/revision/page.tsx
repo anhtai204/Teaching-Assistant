@@ -1,4 +1,7 @@
+"use client";
+
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/FormElements";
 import { Button } from "@/components/ui/Button";
 import { StudentHeader } from "@/components/StudentHeader";
@@ -12,16 +15,18 @@ interface RevisionSuggestion {
 }
 
 export default function StudentRevisionPage() {
+  const { data: session } = useSession();
+  const studentId = (session?.user as any)?.id;
   const [suggestions, setSuggestions] = useState<RevisionSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRevisionData = useCallback(async () => {
+    if (!studentId) return;
     setLoading(true);
     try {
-      // Giả sử user_id lấy từ session/context, ở đây dùng tạm query param hoặc mock
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${baseUrl}/api/student/revision?user_id=1`); // TODO: Get real user_id
+      const res = await fetch(`${baseUrl}/api/student/revision?user_id=${studentId}`);
       if (!res.ok) throw new Error("Failed to fetch revision data");
       const data = await res.json();
       setSuggestions(data.suggestions);
@@ -31,11 +36,13 @@ export default function StudentRevisionPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [studentId]);
 
   useEffect(() => {
-    fetchRevisionData();
-  }, [fetchRevisionData]);
+    if (studentId) {
+      fetchRevisionData();
+    }
+  }, [studentId, fetchRevisionData]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0F0F23]">
@@ -50,7 +57,7 @@ export default function StudentRevisionPage() {
             </div>
             <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Lộ trình Ôn tập</h2>
           </div>
-          <p className="text-slate-500 dark:text-white/50 max-w-2xl leading-relaxed">
+          <p className="text-slate-500 dark:text-white/70 max-w-2xl leading-relaxed">
             Dựa trên lịch sử hội thoại và tiến độ học tập, AI đã xác định các chủ đề bạn cần củng cố để đạt kết quả tốt nhất.
           </p>
         </header>
@@ -75,8 +82,8 @@ export default function StudentRevisionPage() {
             </div>
           ) : suggestions.length === 0 ? (
             <div className="p-12 rounded-3xl border border-dashed border-slate-200 dark:border-white/10 flex flex-col items-center text-center space-y-4">
-              <BookOpen className="w-12 h-12 text-slate-300 dark:text-white/10" />
-              <p className="text-slate-500 dark:text-white/40">Bạn đang làm rất tốt! Chưa có lỗ hổng kiến thức nào được phát hiện.</p>
+              <BookOpen className="w-12 h-12 text-slate-300 dark:text-white/20" />
+              <p className="text-slate-500 dark:text-white/60">Bạn đang làm rất tốt! Chưa có lỗ hổng kiến thức nào được phát hiện.</p>
             </div>
           ) : (
             <div className="grid gap-4">
@@ -99,7 +106,7 @@ export default function StudentRevisionPage() {
               Làm bài kiểm tra 5 phút về những chủ đề này để đánh giá lại mức độ hiểu bài của bạn.
             </p>
           </div>
-          <Button size="lg" className="relative z-10 bg-white text-indigo-600 hover:bg-indigo-50 font-bold px-8 h-14 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
+          <Button size="lg" className="relative z-10 bg-white !text-indigo-600 hover:bg-indigo-50 font-bold px-8 h-14 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
             Bắt đầu ôn luyện
           </Button>
           <div className="absolute top-0 right-0 h-64 w-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
@@ -115,7 +122,7 @@ function RevisionItem({ topic, reason, difficulty }: { topic: string, reason: st
     <Card className="p-6 flex items-start justify-between gap-4 border-none shadow-sm dark:bg-[#1A1A3A]">
       <div className="space-y-1">
         <h4 className="font-bold text-slate-900 dark:text-white">{topic}</h4>
-        <p className="text-sm text-slate-500 dark:text-white/40">{reason}</p>
+        <p className="text-sm text-slate-500 dark:text-white/70">{reason}</p>
       </div>
       <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${
         difficulty === "High" ? "bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400" :
