@@ -1042,3 +1042,50 @@ async def update_roadmap_progress(item_id: str, request: RoadmapProgressUpdate, 
             
     db.commit()
     return {"ok": True, "progress": item.progress, "status": item.status, "actions": item.actions}
+
+@router.get("/api/student/revision")
+async def get_student_revision_suggestions(user_id: str, db: Session = Depends(get_db)):
+    from src.models import KnowledgeGap, RoadmapItem
+    
+    # 1. Lấy các lỗ hổng kiến thức đã phát hiện
+    gaps = db.query(KnowledgeGap).filter(KnowledgeGap.student_id == user_id).order_by(KnowledgeGap.frequency.desc()).limit(5).all()
+    
+    # 2. Lấy các mục Roadmap quan trọng nhưng chưa xong
+    urgent_roadmap = db.query(RoadmapItem).filter(
+        RoadmapItem.student_id == user_id,
+        RoadmapItem.priority == "high",
+        RoadmapItem.progress < 50
+    ).limit(3).all()
+    
+    suggestions = []
+    
+    # Map Gaps
+    for gap in gaps:
+        suggestions.append({
+            "topic": gap.topic,
+            "reason": f"Bạn đã hỏi về chủ đề này {gap.frequency} lần trong các cuộc hội thoại gần đây.",
+            "difficulty": "High" if gap.frequency > 3 else "Medium"
+        })
+        
+    # Map Roadmap
+    for item in urgent_roadmap:
+        # Tránh trùng lặp với gaps
+        if any(s["topic"] == item.topic for s in suggestions):
+            continue
+        suggestions.append({
+            "topic": item.topic,
+            "reason": "Chủ đề ưu tiên cao trong lộ trình học tập của bạn.",
+            "difficulty": "Medium"
+        })
+        
+    # Nếu trống, trả về mặc định
+    if not suggestions:
+        suggestions = [
+            {
+                "topic": "Tổng quan khóa học",
+                "reason": "Bắt đầu bằng việc ôn tập các khái niệm cơ bản.",
+                "difficulty": "Low"
+            }
+        ]
+        
+    return {"suggestions": suggestions}
