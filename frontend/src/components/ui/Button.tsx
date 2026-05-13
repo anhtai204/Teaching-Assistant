@@ -20,8 +20,8 @@ export const Button: React.FC<ButtonProps> = ({
   const variants = {
     primary: "bg-[#4F46E5] text-white hover:opacity-90 hover:-translate-y-0.5 shadow-md",
     secondary: "bg-[#3B82F6] text-white hover:opacity-90 hover:-translate-y-0.5 shadow-md",
-    outline: "border-2 border-[#3B82F6] bg-transparent text-[#3B82F6] hover:bg-blue-50 hover:-translate-y-0.5 shadow-sm",
-    ghost: "text-slate-600 hover:bg-slate-100",
+    outline: "border-2 border-[#3B82F6] bg-transparent text-[#3B82F6] hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:-translate-y-0.5 shadow-sm",
+    ghost: "text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white",
   };
 
   const sizes = {

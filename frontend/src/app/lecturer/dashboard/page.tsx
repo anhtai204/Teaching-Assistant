@@ -88,8 +88,8 @@ export default function LecturerDashboard() {
       <main className="max-w-7xl mx-auto px-6 py-12">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
           <div className="space-y-3">
-            <h2 className="text-4xl font-bold text-slate-900">Manage Your <span className="text-blue-600">Courses</span></h2>
-            <p className="text-lg text-slate-500 font-medium">Create environments, upload materials, and monitor AI student interactions.</p>
+            <h2 className="text-4xl font-bold text-slate-900 dark:text-white">Manage Your <span className="text-blue-600">Courses</span></h2>
+            <p className="text-lg text-slate-500 dark:text-white/50 font-medium">Create environments, upload materials, and monitor AI student interactions.</p>
           </div>
           <div className="flex flex-wrap gap-4">
             <Link href="/lecturer/materials">
@@ -126,16 +126,16 @@ export default function LecturerDashboard() {
                 </div>
 
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight mb-2 truncate" title={course.name}>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight mb-2 truncate" title={course.name}>
                     {course.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                  <div className="flex items-center gap-2 text-slate-400 dark:text-white/40 font-bold text-xs uppercase tracking-widest">
                     <Users className="w-3.5 h-3.5" />
                     <span>Invite Code: <span className="text-blue-600 select-all">{course.enrollment_code}</span></span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 dark:border-white/5">
                   <Link href={`/lecturer/courses/${course.id}`} className="w-full">
                     <Button variant="primary" size="sm" className="w-full h-11">
                       Control Room
@@ -152,12 +152,12 @@ export default function LecturerDashboard() {
           ))}
 
           {courses.length === 0 && (
-            <div className="col-span-full py-24 text-center bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem]">
-              <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300">
+            <div className="col-span-full py-24 text-center bg-white dark:bg-white/3 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[2.5rem]">
+              <div className="bg-slate-50 dark:bg-white/5 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300 dark:text-white/20">
                 <BookOpen className="w-12 h-12" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-3">No courses launched yet</h3>
-              <p className="text-slate-500 max-w-sm mx-auto mb-10 font-medium">Launch your first course to begin interacting with students through your custom AI assistant.</p>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">No courses launched yet</h3>
+              <p className="text-slate-500 dark:text-white/40 max-w-sm mx-auto mb-10 font-medium">Launch your first course to begin interacting with students through your custom AI assistant.</p>
               <Button size="lg" className="px-10 h-16 text-lg" onClick={() => setIsModalOpen(true)}>
                 Launch First Course <ArrowRight className="ml-3 w-6 h-6" />
               </Button>
@@ -182,8 +182,8 @@ export default function LecturerDashboard() {
             </button>
 
             <div className="mb-10">
-              <h3 className="text-3xl font-bold text-slate-900 mb-2">{editingCourseId ? "Update Course" : "Launch New Course"}</h3>
-              <p className="text-slate-500 font-medium">Define the core identity of your course workspace.</p>
+              <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{editingCourseId ? "Update Course" : "Launch New Course"}</h3>
+              <p className="text-slate-500 dark:text-white/50 font-medium">Define the core identity of your course workspace.</p>
             </div>
 
             <form onSubmit={handleSubmitCourse} className="space-y-8">
@@ -202,9 +202,9 @@ export default function LecturerDashboard() {
                 onChange={(e) => setNewCourse({ ...newCourse, code: e.target.value })}
               />
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-700 ml-1">Workspace Description (Optional)</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-white/60 ml-1">Workspace Description (Optional)</label>
                 <textarea
-                  className="w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-slate-900 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-8 focus:ring-blue-500/5 font-medium placeholder:text-slate-300"
+                  className="w-full rounded-xl border-2 border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-5 py-4 text-slate-900 dark:text-white transition-all focus:border-blue-500 dark:focus:border-indigo-500 focus:bg-white dark:focus:bg-white/10 focus:outline-none focus:ring-8 focus:ring-blue-500/5 font-medium placeholder:text-slate-300 dark:placeholder:text-white/20"
                   rows={4}
                   placeholder="What will students learn in this environment?"
                   value={newCourse.description}

@@ -936,7 +936,9 @@ async def get_roadmap(user_id: str, db: Session = Depends(get_db)):
                     "description": item.description,
                     "priority": item.priority,
                     "progress": item.progress,
-                    "status": item.status
+                    "status": item.status,
+                    "sources": item.sources or [],
+                    "actions": item.actions or []
                 } for item in existing_items
             ]
         }
@@ -952,12 +954,24 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
     db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id).delete()
     db.commit()
 
-    # Thu thập dữ liệu
-    history = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == user_id).limit(40).all()
-    history_dicts = [{"role": m.role, "content": m.content} for m in history]
+    # Thu thập dữ liệu cá nhân hóa thực sự
+    # 1. Lấy danh sách khóa học sinh viên đang tham gia
+    from src.models import Course, Document, course_enrollments, course_document_links
     
-    docs = db.query(Document).limit(10).all()
-    allowed_sources = [d.name for d in docs]
+    enrolled_courses = db.query(Course.id).join(course_enrollments).filter(course_enrollments.c.student_id == user_id).all()
+    course_ids = [c.id for c in enrolled_courses]
+    
+    # 2. Lấy tài liệu từ các khóa học đó
+    if course_ids:
+        docs = db.query(Document).join(course_document_links).filter(course_document_links.c.course_id.in_(course_ids)).all()
+    else:
+        docs = []
+    allowed_sources = list(set([d.name for d in docs])) # Loại bỏ trùng lặp nếu tài liệu thuộc nhiều khóa học
+    
+    # 3. Lấy lịch sử chat (tối đa 50 tin nhắn gần nhất)
+    history = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == user_id).order_by(ChatMessage.created_at.desc()).limit(50).all()
+    # Đảo ngược lại để đúng thứ tự thời gian
+    history_dicts = [{"role": m.role, "content": m.content} for m in reversed(history)]
     
     # Gọi AI để tạo lộ trình mới
     items = generate_roadmap_with_llm(user_id, history_dicts, allowed_sources)
@@ -971,7 +985,9 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
             description=item.get("description", ""),
             priority=item.get("priority", "medium"),
             progress=item.get("progress", 0),
-            status=item.get("status", "todo")
+            status=item.get("status", "todo"),
+            sources=item.get("sources", []),
+            actions=item.get("actions", [])
         )
         db.add(new_item)
         saved_items.append(new_item)
@@ -987,13 +1003,16 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
                 "description": item.description,
                 "priority": item.priority,
                 "progress": item.progress,
-                "status": item.status
+                "status": item.status,
+                "sources": item.sources,
+                "actions": item.actions
             } for item in saved_items
         ]
     }
 
 class RoadmapProgressUpdate(BaseModel):
-    progress: int
+    progress: Optional[int] = None
+    actions: Optional[List[dict]] = None
 
 @router.patch("/api/roadmap/{item_id}")
 async def update_roadmap_progress(item_id: str, request: RoadmapProgressUpdate, db: Session = Depends(get_db)):
@@ -1002,13 +1021,24 @@ async def update_roadmap_progress(item_id: str, request: RoadmapProgressUpdate, 
     if not item:
         raise HTTPException(status_code=404, detail="Roadmap item not found")
     
-    item.progress = request.progress
-    if request.progress >= 100:
-        item.status = "done"
-    elif request.progress > 0:
-        item.status = "in_progress"
-    else:
-        item.status = "todo"
-        
+    new_progress = request.progress
+    new_actions = request.actions
+    
+    # Nếu gửi actions lên, tự động tính toán progress
+    if new_actions is not None:
+        item.actions = new_actions
+        if len(new_actions) > 0:
+            done_count = sum(1 for a in new_actions if a.get("done") is True)
+            new_progress = int((done_count / len(new_actions)) * 100)
+    
+    if new_progress is not None:
+        item.progress = new_progress
+        if new_progress == 100:
+            item.status = "done"
+        elif new_progress > 0:
+            item.status = "in_progress"
+        else:
+            item.status = "todo"
+            
     db.commit()
-    return {"message": "Progress updated successfully", "progress": item.progress, "status": item.status}
+    return {"ok": True, "progress": item.progress, "status": item.status, "actions": item.actions}

@@ -83,11 +83,11 @@ export default function StudentDashboard() {
         {/* Header Section */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
           <div className="space-y-3">
-            <h2 className="text-4xl font-bold text-slate-900">
+            <h2 className="text-4xl font-bold text-slate-900 dark:text-white">
               Welcome back, <span className="text-blue-600">{session?.user?.name?.split(' ')[0] || 'Student'}!</span> 👋
             </h2>
-            <p className="text-lg text-slate-500 font-medium">
-              You have <span className="text-slate-900 font-bold">{courses.length} active courses</span> this semester.
+            <p className="text-lg text-slate-500 dark:text-white/50 font-medium">
+              You have <span className="text-slate-900 dark:text-white font-bold">{courses.length} active courses</span> this semester.
             </p>
           </div>
           <Button onClick={() => setIsModalOpen(true)} className="h-14 px-8 shadow-lg shadow-indigo-500/20">
@@ -101,7 +101,7 @@ export default function StudentDashboard() {
           {/* Main Courses Column */}
           <div className="lg:col-span-2 space-y-8">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <BookOpen className="w-6 h-6 text-blue-500" />
                 My Courses
               </h3>
@@ -110,7 +110,7 @@ export default function StudentDashboard() {
                 <input
                   type="text"
                   placeholder="Search courses..."
-                  className="bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:border-blue-500 outline-none transition-all w-64"
+                  className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:border-blue-500 outline-none transition-all w-64"
                 />
               </div>
             </div>
@@ -125,7 +125,7 @@ export default function StudentDashboard() {
                       <div className="bg-blue-100 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-md w-fit uppercase tracking-wider">
                         {course.code}
                       </div>
-                      <h4 className="text-2xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">
+                      <h4 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight">
                         {course.name}
                       </h4>
                     </div>
@@ -156,23 +156,23 @@ export default function StudentDashboard() {
 
           {/* Sidebar Column */}
           <div className="space-y-8">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Sparkles className="w-6 h-6 text-indigo-500" />
               Quick Actions
             </h3>
 
             <div className="space-y-4">
-              <Card className="p-6 border-l-4 border-l-blue-500 bg-gradient-to-r from-white to-blue-50/30">
-                <h4 className="font-bold text-slate-900 mb-1">Resume Revision</h4>
-                <p className="text-sm text-slate-500 font-medium mb-4">Master your remaining topics in Machine Learning.</p>
+              <Card className="p-6 border-l-4 border-l-blue-500 bg-gradient-to-r from-white to-blue-50/30 dark:bg-gradient-to-r dark:from-[#1A1A32] dark:to-blue-900/10 dark:border-white/5">
+                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Resume Revision</h4>
+                <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">Master your remaining topics in Machine Learning.</p>
                 <Link href="/student/revision" className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:gap-2 transition-all">
                   Continue learning <ArrowRight className="w-4 h-4" />
                 </Link>
               </Card>
 
-              <Card className="p-6 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30">
-                <h4 className="font-bold text-slate-900 mb-1">AI Recommendation</h4>
-                <p className="text-sm text-slate-500 font-medium mb-4">You might need to review "Linear Regression" transcripts.</p>
+              <Card className="p-6 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30 dark:from-[#1A1A32] dark:to-indigo-900/10 dark:border-white/5">
+                <h4 className="font-bold text-slate-900 dark:text-white mb-1">AI Recommendation</h4>
+                <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">You might need to review "Linear Regression" transcripts.</p>
                 <Link href="/student/chat" className="text-sm font-bold text-indigo-600 flex items-center gap-1 hover:gap-2 transition-all">
                   Open AI Chat <ArrowRight className="w-4 h-4" />
                 </Link>

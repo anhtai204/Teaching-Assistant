@@ -58,9 +58,9 @@ function RevisionItem({ topic, reason, difficulty }: { topic: string, reason: st
         <p className="text-sm text-slate-500 dark:text-white/40">{reason}</p>
       </div>
       <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${
-        difficulty === "High" ? "bg-red-50 text-red-600" :
-        difficulty === "Medium" ? "bg-amber-50 text-amber-600" :
-        "bg-emerald-50 text-emerald-600"
+        difficulty === "High" ? "bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400" :
+        difficulty === "Medium" ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400" :
+        "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
       }`}>
         {difficulty} Difficulty
       </span>

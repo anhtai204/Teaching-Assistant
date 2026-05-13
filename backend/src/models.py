@@ -147,6 +147,8 @@ class RoadmapItem(Base):
     priority = Column(String, default="medium")
     progress = Column(Integer, default=0)
     status = Column(String, default="todo")
+    sources = Column(JSONB, default=[])
+    actions = Column(JSONB, default=[])
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -375,9 +375,9 @@ const AudioViewer: React.FC<{ url: string, name: string, initialTimestamp?: numb
 
 const DocumentViewer: React.FC<{ url: string; initialPage?: number }> = ({ url, initialPage }) => {
   const isOffice = /\.(docx|pptx|xlsx|doc|ppt|xls)$/i.test(url);
-  
+
   // Use Microsoft Office Online Viewer for Office files to prevent downloads
-  const finalUrl = isOffice 
+  const finalUrl = isOffice
     ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
     : (initialPage ? `${url}#page=${initialPage}` : url);
 

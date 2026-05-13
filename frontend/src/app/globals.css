@@ -64,6 +64,10 @@ body {
   background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
 }
 
+.dark body, body.dark {
+  background: #0F0F23;
+}
+
 * {
   box-sizing: border-box;
 }

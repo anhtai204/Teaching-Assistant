@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, LayoutDashboard, BookOpen, Clock } from "lucide-react";
+import { GraduationCap, LayoutDashboard, BookOpen, Clock, Map } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 
 export const StudentHeader = () => {
@@ -12,6 +12,7 @@ export const StudentHeader = () => {
   const navItems = [
     { name: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
     { name: "Materials", href: "/student/materials", icon: BookOpen },
+    { name: "Roadmaps", href: "/student/roadmap", icon: Map },
     { name: "Revision", href: "/student/revision", icon: Clock },
   ];
 
@@ -31,14 +32,13 @@ export const StudentHeader = () => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
               return (
-                <Link 
-                  key={item.href} 
-                  href={item.href} 
-                  className={`flex items-center gap-2 transition-all ${
-                    isActive 
-                      ? "text-indigo-600 dark:text-indigo-400" 
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2 transition-all ${isActive
+                      ? "text-indigo-600 dark:text-indigo-400"
                       : "text-slate-500 dark:text-white/40 hover:text-indigo-600 dark:hover:text-indigo-400"
-                  }`}
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                   {item.name}
