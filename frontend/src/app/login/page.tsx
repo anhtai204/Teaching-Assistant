@@ -7,6 +7,7 @@ import { signIn, useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, Input } from "@/components/ui/FormElements";
+import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
@@ -41,10 +42,9 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password. Please try again.");
+        setError("Email hoặc mật khẩu không chính xác. Vui lòng thử lại.");
         setIsLoading(false);
       } else {
-        // Fetch session to check role
         const sessionRes = await fetch("/api/auth/session");
         const session = await sessionRes.json();
 
@@ -56,138 +56,125 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err) {
-      setError("An unexpected error occurred. Please try again later.");
+      setError("Đã xảy ra lỗi không mong đợi. Vui lòng thử lại sau.");
       setIsLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-mesh flex overflow-hidden">
+    <main className="min-h-screen bg-mesh flex overflow-hidden font-['Inter']">
       {/* Left Side: Aesthetic Panel */}
       <div className="hidden lg:flex w-1/2 relative items-center justify-center p-12 overflow-hidden bg-[#020617]">
-
-        {/* Aurora gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 via-cyan-500/10 to-purple-600/20" />
-
-        {/* Glow orbs */}
         <div className="absolute top-[-15%] left-[-10%] w-[60%] h-[60%] bg-indigo-500/30 rounded-full blur-[140px] animate-pulse" />
         <div className="absolute bottom-[-15%] right-[-10%] w-[55%] h-[55%] bg-cyan-400/30 rounded-full blur-[140px] animate-pulse delay-700" />
-        <div className="absolute top-[30%] right-[10%] w-[40%] h-[40%] bg-purple-500/20 rounded-full blur-[120px] animate-pulse delay-1000" />
-
-        {/* subtle grid overlay */}
+        
         <div className="absolute inset-0 opacity-[0.06] bg-[linear-gradient(to_right,#ffffff22_1px,transparent_1px),linear-gradient(to_bottom,#ffffff22_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-        <div className="relative z-10 max-w-lg text-white space-y-8">
-
-          {/* glass icon */}
+        <div className="relative z-10 max-w-lg text-white space-y-8 animate-float">
           <div className="inline-flex p-4 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl shadow-indigo-500/20">
-            <svg className="h-10 w-10 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+            <Sparkles className="h-10 w-10 text-indigo-300" />
           </div>
 
-          <h2 className="text-5xl font-bold leading-tight bg-gradient-to-r from-indigo-200 via-cyan-200 to-purple-300 bg-clip-text text-transparent">
-            Elevate Your Learning with AI
+          <h2 className="text-5xl font-black leading-tight bg-gradient-to-r from-indigo-200 via-cyan-200 to-purple-300 bg-clip-text text-transparent font-['Lexend']">
+            Nâng tầm học tập với Trí tuệ nhân tạo
           </h2>
 
-          <p className="text-xl text-indigo-100/80 leading-relaxed">
-            Join thousands of students and lecturers using our platform to master complex subjects through personalized AI guidance.
+          <p className="text-xl text-indigo-100/80 leading-relaxed font-medium">
+            Tham gia cùng hàng nghìn sinh viên và giảng viên để làm chủ mọi môn học thông qua sự hướng dẫn cá nhân hóa từ AI.
           </p>
 
           <div className="flex gap-4 pt-4 items-center">
             <div className="flex -space-x-3">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-10 w-10 rounded-full border-2 border-[#020617] bg-gradient-to-br from-indigo-400 to-cyan-300 shadow-lg" />
+                <div key={i} className="h-12 w-12 rounded-full border-2 border-[#020617] bg-gradient-to-br from-indigo-400 to-cyan-300 shadow-xl flex items-center justify-center text-[10px] font-bold text-white overflow-hidden bg-white/10 backdrop-blur-md">
+                   <img src={`https://i.pravatar.cc/150?u=${i}`} alt="User" className="w-full h-full object-cover" />
+                </div>
               ))}
             </div>
-            <p className="text-sm text-indigo-200 font-medium">
-              Joined by <span className="text-white font-bold">2k+ students</span> today
+            <p className="text-sm text-indigo-200 font-semibold tracking-wide">
+              Đã có <span className="text-white font-black underline decoration-indigo-400 decoration-2 underline-offset-4">+2,000 sinh viên</span> tham gia hôm nay
             </p>
           </div>
         </div>
 
-        {/* footer */}
-        <div className="absolute bottom-12 left-12 right-12 flex justify-between text-indigo-200/40 text-xs font-medium uppercase tracking-widest">
+        <div className="absolute bottom-12 left-12 right-12 flex justify-between text-indigo-200/30 text-[10px] font-black uppercase tracking-[0.2em]">
           <span>AI Teaching Assistant v2.0</span>
-          <span>© 2026 EduAI</span>
+          <span>© 2026 EduAI System</span>
         </div>
       </div>
 
       {/* Right Side: Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 bg-white/40 backdrop-blur-sm lg:bg-transparent">
-        <div className="w-full max-w-[440px] space-y-10">
-          <div className="space-y-3">
-            <div className="lg:hidden inline-block p-2 rounded-xl bg-brand-600 text-white mb-4">
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 bg-white/60 backdrop-blur-xl lg:bg-transparent overflow-y-auto">
+        <div className="w-full max-w-[460px] space-y-10 py-12">
+          <div className="space-y-4">
+            <div className="lg:hidden inline-block p-3 rounded-2xl bg-indigo-600 text-white mb-4 shadow-xl shadow-indigo-200">
+              <Sparkles className="h-8 w-8" />
             </div>
-            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Sign in</h1>
-            <p className="text-slate-500 font-medium">Welcome back! Please enter your details.</p>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter font-['Lexend']">Đăng nhập</h1>
+            <p className="text-slate-500 font-medium text-lg">Chào mừng bạn trở lại! Hãy điền thông tin để tiếp tục.</p>
           </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6 animate-reveal" onSubmit={handleSubmit}>
             {error && (
-              <div className="p-4 rounded-2xl bg-red-50 text-sm text-red-600 border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="p-4 rounded-2xl bg-red-50 text-sm text-red-600 border border-red-100 flex items-center gap-3 animate-shake">
+                <CheckCircle2 className="h-5 w-5 shrink-0 rotate-45" />
                 {error}
               </div>
             )}
 
             <div className="space-y-5">
               <Input
-                label="Email address"
+                label="Địa chỉ Email"
                 name="email"
                 type="email"
-                placeholder="name@university.edu"
+                placeholder="vd: name@university.edu"
                 required
               />
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Input
-                  label="Password"
+                  label="Mật khẩu"
                   name="password"
                   type="password"
                   placeholder="••••••••"
                   required
                 />
-                <div className="flex justify-end">
-                  <Link href="#" className="text-xs font-bold text-brand-600 hover:text-brand-700 transition-colors">
-                    Forgot password?
+                <div className="flex justify-end px-1">
+                  <Link href="#" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors underline-offset-4 hover:underline">
+                    Quên mật khẩu?
                   </Link>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-3 px-1">
               <input
                 type="checkbox"
                 id="remember"
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 transition-all cursor-pointer"
+                className="h-5 w-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
               />
-              <label htmlFor="remember" className="text-sm font-medium text-slate-600 cursor-pointer select-none">
-                Remember for 30 days
+              <label htmlFor="remember" className="text-sm font-bold text-slate-600 cursor-pointer select-none">
+                Ghi nhớ đăng nhập trong 30 ngày
               </label>
             </div>
 
             <div className="space-y-4 pt-2">
-              <Button className="w-full py-4 text-lg font-bold shadow-premium" type="submit" isLoading={isLoading}>
-                Sign in
+              <Button className="w-full py-5 text-lg font-black shadow-xl shadow-indigo-200 rounded-2xl group transition-all" type="submit" isLoading={isLoading}>
+                Đăng nhập ngay <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
 
-              <div className="relative">
+              <div className="relative py-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-slate-100"></div>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white lg:bg-mesh px-4 text-slate-400 font-bold tracking-widest">Or continue with</span>
+                <div className="relative flex justify-center text-[10px] uppercase font-black tracking-[0.2em] text-slate-400">
+                  <span className="bg-white lg:bg-transparent px-4">Hoặc tiếp tục với</span>
                 </div>
               </div>
 
               <Button
                 variant="outline"
-                className="w-full py-4 flex items-center justify-center gap-3 font-bold border-2"
+                className="w-full py-5 flex items-center justify-center gap-3 font-bold border-2 rounded-2xl hover:bg-slate-50 transition-all active:scale-95"
                 type="button"
                 onClick={() => signIn("google", { callbackUrl: "/student/dashboard" })}
               >
@@ -202,10 +189,10 @@ export default function LoginPage() {
             </div>
           </form>
 
-          <p className="text-center text-sm font-medium text-slate-500">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-bold text-brand-600 hover:text-brand-700 transition-colors decoration-2 underline-offset-4 hover:underline">
-              Sign up for free
+          <p className="text-center text-sm font-bold text-slate-500">
+            Chưa có tài khoản?{" "}
+            <Link href="/signup" className="text-indigo-600 hover:text-indigo-700 transition-colors decoration-2 underline-offset-4 hover:underline">
+              Đăng ký miễn phí
             </Link>
           </p>
         </div>
