@@ -306,12 +306,12 @@ function ChatContent() {
     
     // Tin nhắn của sinh viên chỉ cần hiển thị văn bản thuần túy (Plain Text)
     if (isUser) {
-      return <div className="whitespace-pre-wrap break-words text-white">{content}</div>;
+      return <div className="whitespace-pre-wrap break-words text-white font-medium">{content}</div>;
     }
 
     // Tin nhắn của AI sẽ được render bằng Markdown
     return (
-      <div className="prose max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:p-0 prose-pre:rounded-2xl prose-slate dark:prose-invert prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-table:border prose-table:border-slate-100 prose-th:bg-slate-50 prose-th:p-4 prose-td:p-4">
+      <div className="prose max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:p-0 prose-pre:rounded-2xl prose-slate dark:prose-invert prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-table:border prose-table:border-slate-100 prose-th:bg-slate-50 prose-th:p-4 prose-td:p-4 font-normal">
         <ReactMarkdown 
           remarkPlugins={[remarkGfm]}
           components={{
@@ -320,7 +320,7 @@ function ChatContent() {
               const match = /language-(\w+)/.exec(className || '');
               const isBlock = !!match;
               return isBlock ? (
-                <div className="relative group/code my-6">
+                <div className="relative group/code my-6 font-mono">
                   <div className="absolute right-4 top-4 z-20">
                     <button 
                       onClick={() => {
@@ -353,7 +353,7 @@ function ChatContent() {
               if (isCitation) {
                 if (isVisible) {
                   return (
-                    <span className="inline-flex items-center text-slate-500 font-bold text-xs mx-1 not-prose">
+                    <span className="inline-flex items-center text-slate-500 font-bold text-[10px] mx-1 not-prose uppercase tracking-tighter">
                       [Nguồn:
                       <Link
                         href={props.href || "#"}
@@ -368,7 +368,7 @@ function ChatContent() {
                   );
                 } else {
                   return (
-                    <span className="inline-flex items-center text-slate-400 font-bold text-xs mx-1 not-prose">
+                    <span className="inline-flex items-center text-slate-400 font-bold text-[10px] mx-1 not-prose uppercase tracking-tighter">
                       [Nguồn: {props.children}]
                     </span>
                   );
@@ -393,20 +393,20 @@ function ChatContent() {
   );
 
   return (
-    <div className="flex h-screen bg-white dark:bg-[#0F0F23] relative overflow-hidden font-['Open_Sans']">
+    <div className="flex h-screen bg-white dark:bg-[#0F0F23] relative overflow-hidden font-['Inter']">
       {/* Sidebar */}
       <aside className="w-80 border-r border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#0F0F23] flex flex-col shrink-0">
         <div className="p-6 border-b border-slate-100 dark:border-white/5 bg-white dark:bg-[#1A1A3A]">
-          <Link href="/student/dashboard" className="text-xs font-bold text-slate-400 hover:text-blue-600 flex items-center gap-2 mb-6 uppercase tracking-widest transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+          <Link href="/student/dashboard" className="text-[10px] font-black text-slate-400 hover:text-blue-600 flex items-center gap-2 mb-6 uppercase tracking-[0.2em] transition-colors">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Về Dashboard
           </Link>
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-xl">
+            <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate leading-tight" title={course?.name}>
-              {course?.name || "Loading..."}
+            <h2 className="text-lg font-black text-slate-900 dark:text-white truncate leading-tight font-['Lexend']" title={course?.name}>
+              {course?.name || "Đang tải..."}
             </h2>
           </div>
         </div>
@@ -414,22 +414,22 @@ function ChatContent() {
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           <Button
             variant="outline"
-            className="w-full justify-center gap-2 border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1A3A] hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-500/10 transition-all py-6 rounded-2xl shadow-sm dark:text-white"
+            className="w-full justify-center gap-2 border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1A3A] hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-500/10 transition-all py-6 rounded-2xl shadow-sm dark:text-white font-bold text-sm"
             onClick={() => {
               isAutoSelectDone.current = true; // Ngăn không cho auto-select lại phiên cũ
               setCurrentSessionId(null);
-              const greeting = course?.greeting_message || `Hello ${session?.user?.name || "Student"}! I'm your AI Teaching Assistant for **${course?.name || "this course"}**. How can I help you today?`;
+              const greeting = course?.greeting_message || `Xin chào ${session?.user?.name || "bạn"}! Tôi là Trợ lý AI cho khóa học **${course?.name || "này"}**. Hôm nay tôi có thể giúp gì cho bạn?`;
               setMessages([{ role: "assistant", content: greeting }]);
             }}
           >
             <PlusCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            New Discussion
+            Cuộc hội thoại mới
           </Button>
 
           <div className="space-y-4">
-            <h3 className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="px-3 text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] flex items-center gap-2 font-['Lexend']">
               <History className="w-3 h-3" />
-              Chat History
+              Lịch sử thảo luận
             </h3>
             <div className="space-y-1">
               {chatSessions.map((s) => (
@@ -439,7 +439,7 @@ function ChatContent() {
                   className={`w-full text-left p-4 rounded-2xl text-sm transition-all group relative border ${currentSessionId === s.id ? "bg-white dark:bg-[#1A1A3A] shadow-md border-blue-100 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 font-bold" : "text-slate-500 dark:text-white/40 border-transparent hover:bg-white dark:hover:bg-white/5 hover:shadow-sm"
                     }`}
                 >
-                  <p className="truncate pr-4 font-bold dark:text-white">{s.title || "Untitled Chat"}</p>
+                  <p className="truncate pr-4 font-bold dark:text-white">{s.title || "Chưa có tiêu đề"}</p>
                   <div className="flex items-center gap-2 mt-1.5 opacity-60">
                     <Clock className="w-3 h-3" />
                     <span className="text-[10px] font-bold">{new Date(s.created_at).toLocaleDateString()}</span>
@@ -455,9 +455,9 @@ function ChatContent() {
           {/* New Roadmap Section */}
           <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
             <div className="flex items-center justify-between px-3">
-              <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.2em] flex items-center gap-2 font-['Lexend']">
                 <Sparkles className="w-3 h-3" />
-                Learning Focus
+                Trọng tâm học tập
               </h3>
               <button 
                 onClick={async () => {
@@ -473,9 +473,9 @@ function ChatContent() {
                     console.error("Refresh failed", e);
                   }
                 }}
-                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors uppercase tracking-widest"
               >
-                Refresh
+                Cập nhật
               </button>
             </div>
             <div className="space-y-3">
@@ -484,14 +484,14 @@ function ChatContent() {
                   <div className="flex justify-between items-center mb-2">
                     <p className={`text-xs font-bold truncate max-w-[140px] ${item.status === 'done' ? 'text-green-700 dark:text-green-400 line-through opacity-70' : 'text-slate-700 dark:text-white'}`}>{item.topic}</p>
                     {item.status !== 'done' && (
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
                         item.priority?.toLowerCase() === 'high' ? '!text-rose-600 !bg-rose-50 dark:!bg-rose-500/20 dark:!text-rose-400' :
                         item.priority?.toLowerCase() === 'medium' ? '!text-amber-600 !bg-amber-50 dark:!bg-amber-500/20 dark:!text-amber-400' :
                         '!text-blue-600 !bg-blue-50 dark:!bg-blue-500/20 dark:!text-blue-400'
                       }`}>{item.priority}</span>
                     )}
                   </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
+                  <div className="h-1 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
                     <div 
                       className={`h-full rounded-full transition-all duration-1000 ${
                         item.status === 'done' ? "bg-green-500" : item.priority?.toLowerCase() === "high" ? "bg-red-500" : item.priority?.toLowerCase() === "medium" ? "bg-amber-500" : "bg-blue-500"
@@ -503,20 +503,20 @@ function ChatContent() {
                     {item.status !== 'done' ? (
                       <button 
                         onClick={() => handleUpdateProgress(item.id, 100)}
-                        className="text-[10px] flex items-center gap-1 font-bold text-slate-400 hover:text-green-600 transition-colors"
+                        className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-slate-400 hover:text-green-600 transition-colors"
                       >
-                        <CheckCircle2 className="w-3 h-3" /> Mark as Done
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Hoàn thành
                       </button>
                     ) : (
-                      <span className="text-[10px] flex items-center gap-1 font-bold text-green-600">
-                        <CheckCircle2 className="w-3 h-3" /> Completed
+                      <span className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-green-600">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Đã xong
                       </span>
                     )}
                   </div>
                 </div>
               ))}
               {roadmapItems.length === 0 && (
-                <p className="px-4 text-[10px] text-slate-400 font-medium italic">Keep chatting or click Refresh to generate your personalized roadmap!</p>
+                <p className="px-4 text-[10px] text-slate-400 font-bold italic">Bắt đầu trò chuyện để AI xây dựng lộ trình cá nhân cho bạn!</p>
               )}
             </div>
           </div>
@@ -529,25 +529,25 @@ function ChatContent() {
         <div className="h-20 border-b border-slate-100 dark:border-white/5 bg-white/80 dark:bg-[#0F0F23]/80 backdrop-blur-md px-8 flex items-center justify-between z-20 sticky top-0">
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md">AI</div>
-              <div className="h-8 w-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-blue-600 font-black text-xs shadow-sm">TA</div>
+              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md font-['Lexend']">AI</div>
+              <div className="h-8 w-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-blue-600 font-black text-xs shadow-sm font-['Lexend']">TA</div>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">Smart Assistant</p>
-              <p className="text-[10px] font-bold text-green-500 uppercase mt-1 flex items-center gap-1">
+              <p className="text-sm font-black text-slate-900 dark:text-white leading-none font-['Lexend']">Smart Assistant</p>
+              <p className="text-[10px] font-black text-green-500 uppercase mt-1 flex items-center gap-1 tracking-widest">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                Active now
+                Trực tuyến
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden sm:block text-right">
-              <p className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase">Current Session</p>
+              <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-widest">Phiên hiện tại</p>
               <p className="text-xs font-bold text-slate-600 dark:text-white/60 truncate max-w-[150px]">
-                {chatSessions.find(s => s.id === currentSessionId)?.title || "Fresh Chat"}
+                {chatSessions.find(s => s.id === currentSessionId)?.title || "Cuộc thảo luận mới"}
               </p>
             </div>
-            <div className="h-8 w-[1px] bg-slate-100 hidden sm:block mx-2" />
+            <div className="h-8 w-[1px] bg-slate-100 dark:bg-white/5 hidden sm:block mx-2" />
             <UserMenu />
           </div>
         </div>
@@ -556,14 +556,14 @@ function ChatContent() {
           <div className="max-w-4xl mx-auto space-y-12 pb-24">
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-6 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`h-12 w-12 shrink-0 rounded-2xl flex items-center justify-center font-bold text-xs shadow-md transition-transform duration-300 ${msg.role === "assistant" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-100"
+                <div className={`h-11 w-11 shrink-0 rounded-2xl flex items-center justify-center font-black text-xs shadow-md transition-transform duration-300 font-['Lexend'] ${msg.role === "assistant" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-100"
                   }`}>
                   {msg.role === "assistant" ? "AI" : (session?.user?.name?.substring(0, 2).toUpperCase() || "ME")}
                 </div>
                 <div className={`max-w-[85%] space-y-4 ${msg.role === "user" ? "text-left" : ""}`}>
-                  <div className={`p-7 rounded-[2rem] text-slate-800 dark:text-slate-200 leading-relaxed text-[16px] shadow-sm relative transition-all ${msg.role === "assistant"
-                    ? "bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/5 rounded-tl-lg font-medium"
-                    : "bg-blue-600 text-white rounded-tr-lg font-semibold shadow-blue-200"
+                  <div className={`p-7 rounded-[2rem] text-slate-800 dark:text-slate-200 leading-relaxed text-[15px] shadow-sm relative transition-all ${msg.role === "assistant"
+                    ? "bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/5 rounded-tl-lg"
+                    : "bg-blue-600 text-white rounded-tr-lg shadow-blue-200"
                     }`}>
                     {msg.role === "assistant" && !msg.content && isLoading && i === messages.length - 1 ? (
                       <ThinkingDots />
@@ -572,9 +572,9 @@ function ChatContent() {
                         {renderContent(msg.content || "", msg.role as "user" | "assistant")}
                         {msg.manual_answer && (
                           <div className="mt-6 pt-4 border-t border-amber-200 dark:border-amber-700/30">
-                            <div className="flex items-center gap-2 mb-3 text-amber-700 dark:text-amber-400 font-bold text-sm">
-                              <AlertTriangle className="h-4 w-4" />
-                              <span>Lecturer Correction</span>
+                            <div className="flex items-center gap-2 mb-3 text-amber-700 dark:text-amber-400 font-black text-[10px] uppercase tracking-widest">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              <span>Hiệu chỉnh từ Giảng viên</span>
                             </div>
                             <div className="text-slate-800 dark:text-slate-200">
                               {renderContent(msg.manual_answer, "assistant")}
@@ -587,25 +587,25 @@ function ChatContent() {
 
                   {msg.role === "assistant" && msg.content && (
                     <div className="flex items-center gap-6 px-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => msg.id && handleFeedback(msg.id, 1)}
                           className={`p-2 rounded-xl transition-all cursor-pointer ${msg.feedback_rating === 1 ? "text-blue-600 bg-blue-50 dark:bg-blue-900/30" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"}`}
-                          title="Good answer"
+                          title="Hữu ích"
                         >
                           <ThumbsUp className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => msg.id && handleFeedback(msg.id, -1)}
                           className={`p-2 rounded-xl transition-all cursor-pointer ${msg.feedback_rating === -1 && !msg.is_flagged ? "text-orange-500 bg-orange-50 dark:bg-orange-900/30" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"}`}
-                          title="Bad answer"
+                          title="Không rõ ràng"
                         >
                           <ThumbsDown className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => msg.id && handleFeedback(msg.id, null, true)}
                           className={`p-2 rounded-xl transition-all cursor-pointer ${msg.is_flagged ? "text-red-500 bg-red-50 dark:bg-red-900/30" : "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"}`}
-                          title="Report inaccurate answer"
+                          title="Báo cáo lỗi"
                         >
                           <Flag className="h-4 w-4" />
                         </button>
@@ -620,15 +620,15 @@ function ChatContent() {
         </div>
 
         {/* Input */}
-        <div className="p-8 bg-white border-t border-slate-100 shadow-[0_-10px_30px_rgba(0,0,0,0.02)] z-30">
+        <div className="p-8 bg-white dark:bg-[#0F0F23] border-t border-slate-100 dark:border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.02)] z-30">
           <div className="max-w-4xl mx-auto relative group">
             <textarea
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-              placeholder={`Type your question about ${course?.name || 'this course'}...`}
-              className="w-full rounded-2xl border-2 border-slate-100 bg-[#F8FAFC] px-8 py-5 pr-20 text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-8 focus:ring-blue-500/5 transition-all resize-none shadow-inner min-h-[68px] font-medium text-lg placeholder:text-slate-300"
+              placeholder={`Nhập câu hỏi về ${course?.name || 'khóa học'}...`}
+              className="w-full rounded-2xl border-2 border-slate-100 dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 px-8 py-5 pr-20 text-slate-900 dark:text-white focus:border-blue-500 focus:bg-white dark:focus:bg-white/10 focus:outline-none focus:ring-8 focus:ring-blue-500/5 transition-all resize-none shadow-inner min-h-[68px] font-medium text-base placeholder:text-slate-400"
             />
             <button
               onClick={handleSend}
@@ -642,8 +642,8 @@ function ChatContent() {
               )}
             </button>
           </div>
-          <p className="text-center text-[10px] font-bold text-slate-400 uppercase mt-4 tracking-widest">
-            AI Assistant may provide inaccurate information. Always verify with course materials.
+          <p className="text-center text-[9px] font-black text-slate-400 uppercase mt-4 tracking-[0.2em] opacity-60 font-['Lexend']">
+            AI Assistant có thể đưa ra câu trả lời chưa chính xác. Hãy luôn đối chiếu với giáo trình.
           </p>
         </div>
       </main>
@@ -652,73 +652,73 @@ function ChatContent() {
       {previewSource && (
         <div className="absolute inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300" onClick={() => setPreviewSource(null)} />
-          <aside className="w-[450px] h-full bg-white shadow-2xl relative z-10 flex flex-col animate-in slide-in-from-right duration-500 border-l border-slate-100">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-[#F8FAFC]">
+          <aside className="w-[450px] h-full bg-white dark:bg-[#0F0F23] shadow-2xl relative z-10 flex flex-col animate-in slide-in-from-right duration-500 border-l border-slate-100 dark:border-white/5">
+            <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-[#F8FAFC] dark:bg-white/5">
               <div className="flex items-center gap-4">
-                <div className="bg-indigo-100 p-3 rounded-2xl">
-                  <Sparkles className="w-6 h-6 text-indigo-600" />
+                <div className="bg-indigo-100 dark:bg-indigo-500/20 p-3 rounded-2xl">
+                  <Sparkles className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black uppercase text-indigo-600 tracking-widest leading-none mb-1.5">Context Intelligence</h4>
-                  <p className="text-xs text-slate-500 font-bold truncate max-w-[250px]">{previewSource?.metadata?.source}</p>
+                  <h4 className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-[0.2em] leading-none mb-1.5 font-['Lexend']">Ngữ cảnh AI</h4>
+                  <p className="text-xs text-slate-500 dark:text-white/50 font-bold truncate max-w-[250px]">{previewSource?.metadata?.source}</p>
                 </div>
               </div>
-              <button onClick={() => setPreviewSource(null)} className="p-2 hover:bg-slate-200 rounded-xl transition-all text-slate-400 cursor-pointer">
+              <button onClick={() => setPreviewSource(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-xl transition-all text-slate-400 cursor-pointer">
                 <X className="h-6 w-6" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-10 space-y-10">
               <div className="space-y-6">
-                <h5 className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-2">
+                <h5 className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-widest flex items-center gap-2 font-['Lexend']">
                   <FileText className="w-3 h-3" />
-                  Verified Excerpt
+                  Trích dẫn xác thực
                 </h5>
-                <div className="p-10 bg-[#F8FAFC] rounded-[2.5rem] border-2 border-blue-50 text-slate-800 leading-relaxed text-[17px] whitespace-pre-wrap font-medium shadow-inner relative overflow-hidden">
+                <div className="p-10 bg-[#F8FAFC] dark:bg-white/5 rounded-[2.5rem] border-2 border-blue-50 dark:border-blue-500/20 text-slate-800 dark:text-slate-200 leading-relaxed text-[16px] whitespace-pre-wrap font-medium shadow-inner relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-2 h-full bg-blue-500" />
-                  <mark className="bg-blue-50 text-slate-900 p-0 rounded-sm">
+                  <mark className="bg-blue-50 dark:bg-blue-500/20 text-slate-900 dark:text-white p-0 rounded-sm">
                     {previewSource?.content}
                   </mark>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-6">
-                <Card className="p-6 border-none bg-blue-50/50 shadow-sm ring-1 ring-blue-100">
-                  <h5 className="text-[10px] font-black uppercase text-blue-600 tracking-widest mb-4">Metadata Analysis</h5>
+                <Card className="p-6 border-none bg-blue-50/50 dark:bg-blue-500/5 shadow-sm ring-1 ring-blue-100 dark:ring-blue-500/20">
+                  <h5 className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-widest mb-4 font-['Lexend']">Phân tích Metadata</h5>
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase">Document Format</p>
-                      <p className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-blue-500" />
-                        {previewSource?.metadata?.format?.toUpperCase() || "PDF DOCUMENT"}
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Định dạng</p>
+                      <p className="text-xs font-bold text-slate-700 dark:text-white flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        {previewSource?.metadata?.format?.toUpperCase() || "TÀI LIỆU PDF"}
                       </p>
                     </div>
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase">Retriever Confidence</p>
-                      <p className="text-sm font-bold text-green-600 flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                        {(previewSource?.score * 100)?.toFixed(1)}% Accurate
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Độ tin cậy</p>
+                      <p className="text-xs font-bold text-green-600 flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                        {(previewSource?.score * 100)?.toFixed(1)}% Chính xác
                       </p>
                     </div>
                   </div>
                 </Card>
 
-                <div className="p-6 bg-indigo-50/50 rounded-2xl border-2 border-indigo-50 flex gap-4 shadow-sm">
-                  <Info className="h-6 w-6 text-indigo-500 shrink-0" />
-                  <p className="text-xs text-indigo-800 leading-relaxed font-semibold">
-                    This information was extracted directly from the course repository. Use it to cross-reference with your lecture notes.
+                <div className="p-6 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-2xl border-2 border-indigo-50 dark:border-indigo-500/10 flex gap-4 shadow-sm">
+                  <Info className="h-5 w-5 text-indigo-500 shrink-0" />
+                  <p className="text-xs text-indigo-800 dark:text-indigo-300 leading-relaxed font-bold">
+                    Thông tin này được trích xuất trực tiếp từ kho học liệu của khóa học. Hãy dùng nó để đối chiếu với bài giảng của bạn.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-10 bg-[#F8FAFC] border-t border-slate-100">
+            <div className="p-10 bg-[#F8FAFC] dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
               <Button
-                className="w-full h-16 text-lg font-bold shadow-xl shadow-blue-100"
+                className="w-full h-16 text-base font-black uppercase tracking-widest shadow-xl shadow-blue-100 dark:shadow-none"
                 variant="primary"
                 onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/data/documents/${previewSource?.metadata?.source}`, '_blank')}
               >
-                View Full Document <ExternalLink className="ml-3 w-5 h-5" />
+                Xem toàn bộ tài liệu <ExternalLink className="ml-3 w-5 h-5" />
               </Button>
             </div>
           </aside>
@@ -731,15 +731,15 @@ function ChatContent() {
 export default function StudentChatPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen items-center justify-center bg-[#F8FAFC] text-slate-400">
+      <div className="flex h-screen items-center justify-center bg-[#F8FAFC] dark:bg-[#0F0F23] text-slate-400">
         <div className="flex flex-col items-center gap-6">
           <div className="relative">
-            <div className="h-16 w-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+            <div className="h-16 w-16 border-4 border-blue-100 dark:border-white/5 border-t-blue-600 rounded-full animate-spin" />
             <Sparkles className="absolute inset-0 m-auto w-6 h-6 text-blue-600 animate-pulse" />
           </div>
-          <div className="text-center">
-            <p className="text-xl font-bold text-slate-900 mb-1">Initializing Assistant</p>
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Optimizing learning context...</p>
+          <div className="text-center font-['Lexend']">
+            <p className="text-xl font-black text-slate-900 dark:text-white mb-1">Đang khởi tạo Trợ lý</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Tối ưu hóa ngữ cảnh học tập...</p>
           </div>
         </div>
       </div>
