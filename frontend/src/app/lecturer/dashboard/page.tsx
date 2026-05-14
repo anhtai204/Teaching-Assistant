@@ -23,6 +23,7 @@ export default function LecturerDashboard() {
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [newCourse, setNewCourse] = useState({ name: "", code: "", description: "" });
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   useEffect(() => {
     if (session?.user) {
@@ -40,6 +41,8 @@ export default function LecturerDashboard() {
       }
     } catch (error) {
       console.error("Failed to fetch courses:", error);
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
@@ -107,58 +110,77 @@ export default function LecturerDashboard() {
 
         {/* Course Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {courses.map((course) => (
-            <Card key={course.id} className="p-8 border-none hover:shadow-2xl transition-all duration-300 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-[100px] -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500" />
-
-              <div className="relative z-10 space-y-6">
-                <div className="flex justify-between items-start">
-                  <div className="bg-blue-100 text-blue-700 text-[10px] font-black px-3 py-1.5 rounded-md w-fit uppercase tracking-wider">
-                    {course.code}
+          {isInitialLoading ? (
+            // Skeleton loading
+            Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="p-8 border-none bg-white dark:bg-[#1A1A3A] relative overflow-hidden animate-pulse">
+                <div className="space-y-6">
+                  <div className="h-6 w-16 bg-slate-100 dark:bg-white/5 rounded-md" />
+                  <div className="space-y-3">
+                    <div className="h-8 w-3/4 bg-slate-100 dark:bg-white/5 rounded-lg" />
+                    <div className="h-4 w-1/2 bg-slate-100 dark:bg-white/5 rounded-md" />
                   </div>
-                  <button
-                    onClick={() => handleEditClick(course)}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
-                    title="Edit Course Info"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight mb-2 truncate" title={course.name}>
-                    {course.name}
-                  </h3>
-                  <div className="flex items-center gap-2 text-slate-400 dark:text-white/40 font-bold text-xs uppercase tracking-widest">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Invite Code: <span className="text-blue-600 select-all">{course.enrollment_code}</span></span>
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 dark:border-white/5">
+                    <div className="h-11 bg-slate-100 dark:bg-white/5 rounded-xl" />
+                    <div className="h-11 bg-slate-100 dark:bg-white/5 rounded-xl" />
                   </div>
                 </div>
+              </Card>
+            ))
+          ) : (
+            courses.map((course) => (
+              <Card key={course.id} className="p-8 border-none hover:shadow-2xl transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-[100px] -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500" />
 
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 dark:border-white/5">
-                  <Link href={`/lecturer/courses/${course.id}`} className="w-full">
-                    <Button variant="primary" size="sm" className="w-full h-11">
-                      Control Room
-                    </Button>
-                  </Link>
-                  <Link href={`/lecturer/materials?course_id=${course.id}`} className="w-full">
-                    <Button variant="outline" size="sm" className="w-full h-11 border-2">
-                      Materials
-                    </Button>
-                  </Link>
+                <div className="relative z-10 space-y-6">
+                  <div className="flex justify-between items-start">
+                    <div className="bg-blue-100 text-blue-700 text-[10px] font-black px-3 py-1.5 rounded-md w-fit uppercase tracking-wider">
+                      {course.code}
+                    </div>
+                    <button
+                      onClick={() => handleEditClick(course)}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
+                      title="Edit Course Info"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors leading-tight mb-2 truncate" title={course.name}>
+                      {course.name}
+                    </h3>
+                    <div className="flex items-center gap-2 text-slate-400 dark:text-white/40 font-bold text-xs uppercase tracking-widest">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Invite Code: <span className="text-blue-600 select-all">{course.enrollment_code}</span></span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 dark:border-white/5">
+                    <Link href={`/lecturer/courses/${course.id}`} className="w-full">
+                      <Button variant="primary" size="sm" className="w-full h-11">
+                        Control Room
+                      </Button>
+                    </Link>
+                    <Link href={`/lecturer/materials?course_id=${course.id}`} className="w-full">
+                      <Button variant="outline" size="sm" className="w-full h-11 border-2">
+                        Materials
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))
+          )}
 
-          {courses.length === 0 && (
-            <div className="col-span-full py-24 text-center bg-white dark:bg-white/3 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[2.5rem]">
+          {!isInitialLoading && courses.length === 0 && (
+            <div className="col-span-full py-24 text-center bg-white dark:bg-[#1A1A3A] border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[2.5rem] shadow-sm">
               <div className="bg-slate-50 dark:bg-white/5 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300 dark:text-white/20">
                 <BookOpen className="w-12 h-12" />
               </div>
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">No courses launched yet</h3>
               <p className="text-slate-500 dark:text-white/40 max-w-sm mx-auto mb-10 font-medium">Launch your first course to begin interacting with students through your custom AI assistant.</p>
-              <Button size="lg" className="px-10 h-16 text-lg" onClick={() => setIsModalOpen(true)}>
+              <Button size="lg" className="px-10 h-16 text-lg shadow-xl shadow-blue-500/20" onClick={() => setIsModalOpen(true)}>
                 Launch First Course <ArrowRight className="ml-3 w-6 h-6" />
               </Button>
             </div>
@@ -168,7 +190,7 @@ export default function LecturerDashboard() {
 
       {/* Create Course Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
           <Card className="w-full max-w-lg p-12 relative shadow-2xl animate-in zoom-in-95 duration-200">
             <button
               onClick={() => {

@@ -188,19 +188,19 @@ export default function StudentCourseWorkspace() {
               </div>
             </Card>
 
-            <Card className="p-8 space-y-6 border-none shadow-sm">
-              <h4 className="text-sm font-black uppercase text-slate-400 tracking-widest">About this course</h4>
-              <p className="text-sm text-slate-600 leading-relaxed">
+            <Card className="p-8 space-y-6 border-none shadow-sm bg-white dark:bg-[#1A1A3A]">
+              <h4 className="text-sm font-black uppercase text-slate-400 dark:text-white/30 tracking-widest">About this course</h4>
+              <p className="text-sm text-slate-600 dark:text-white/60 leading-relaxed">
                 {course?.description || "Welcome to your learning workspace. Access documents and interact with our specialized AI to master this subject."}
               </p>
-              <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
+              <div className="pt-4 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-slate-900">{materials.length}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Files</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{materials.length}</p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">Files</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-slate-900">Active</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Status</p>
+                  <p className="text-2xl font-bold text-brand-600 dark:text-brand-400">Active</p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">AI Status</p>
                 </div>
               </div>
             </Card>

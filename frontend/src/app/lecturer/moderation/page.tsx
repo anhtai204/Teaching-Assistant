@@ -140,7 +140,7 @@ function ModerationContent() {
             <select 
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-700 dark:text-white outline-none pr-8 cursor-pointer min-w-[150px]"
+              className="bg-transparent text-xs font-bold text-slate-700 dark:text-white dark:bg-[#1A1A3A] outline-none pr-8 cursor-pointer min-w-[150px]"
             >
               <option value="all">All Courses</option>
               {courses.map(c => (

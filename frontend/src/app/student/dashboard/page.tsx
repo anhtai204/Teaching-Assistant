@@ -29,6 +29,7 @@ export default function StudentDashboard() {
   const [enrollCode, setEnrollCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [roadmapItems, setRoadmapItems] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (session?.user) {
       fetchCourses();
+      fetchRoadmap();
     }
   }, [session]);
 
@@ -62,6 +64,21 @@ export default function StudentDashboard() {
       console.error("Failed to fetch courses:", error);
     } finally {
       setIsLoadingCourses(false);
+    }
+  };
+
+  const fetchRoadmap = async () => {
+    if (!session?.user) return;
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const studentId = (session.user as any).id;
+      const response = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRoadmapItems(data.items || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch roadmap:", error);
     }
   };
 
@@ -220,21 +237,57 @@ export default function StudentDashboard() {
             </h3>
 
             <div className="space-y-4">
-              <Card className="p-6 border-l-4 border-l-blue-500 bg-gradient-to-r from-white to-blue-50/30 dark:bg-gradient-to-r dark:from-[#1A1A32] dark:to-blue-900/10 dark:border-white/5">
-                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Resume Revision</h4>
-                <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">Master your remaining topics in Machine Learning.</p>
-                <Link href="/student/revision" className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:gap-2 transition-all">
-                  Continue learning <ArrowRight className="w-4 h-4" />
-                </Link>
-              </Card>
+              {/* Dynamic Resume Revision */}
+              {roadmapItems.length > 0 && roadmapItems.find(i => i.status === 'in_progress' || i.status === 'todo') ? (
+                (() => {
+                  const nextItem = roadmapItems.find(i => i.status === 'in_progress') || roadmapItems.find(i => i.status === 'todo');
+                  return (
+                    <Card className="p-6 border-l-4 border-l-blue-500 bg-gradient-to-r from-white to-blue-50/30 dark:bg-gradient-to-r dark:from-[#1A1A32] dark:to-blue-900/10 dark:border-white/5">
+                      <h4 className="font-bold text-slate-900 dark:text-white mb-1">Resume Revision</h4>
+                      <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">
+                        Master your remaining tasks in <span className="text-blue-600 font-bold">{nextItem.topic}</span>.
+                      </p>
+                      <Link href="/student/roadmap" className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:gap-2 transition-all">
+                        Continue learning <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </Card>
+                  );
+                })()
+              ) : (
+                <Card className="p-6 border-l-4 border-l-slate-200 bg-slate-50 dark:bg-white/5 dark:border-white/10">
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-1">No pending tasks</h4>
+                  <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">You're all caught up! Create a new roadmap to keep growing.</p>
+                  <Link href="/student/roadmap" className="text-sm font-bold text-slate-400 flex items-center gap-1">
+                    Go to Roadmap <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </Card>
+              )}
 
-              <Card className="p-6 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30 dark:from-[#1A1A32] dark:to-indigo-900/10 dark:border-white/5">
-                <h4 className="font-bold text-slate-900 dark:text-white mb-1">AI Recommendation</h4>
-                <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">You might need to review "Linear Regression" transcripts.</p>
-                <Link href="/student/chat" className="text-sm font-bold text-indigo-600 flex items-center gap-1 hover:gap-2 transition-all">
-                  Open AI Chat <ArrowRight className="w-4 h-4" />
-                </Link>
-              </Card>
+              {/* Dynamic AI Recommendation */}
+              {roadmapItems.length > 0 && roadmapItems.some(i => i.priority === 'high' && i.status !== 'done') ? (
+                (() => {
+                  const highPriority = roadmapItems.find(i => i.priority === 'high' && i.status !== 'done');
+                  return (
+                    <Card className="p-6 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30 dark:from-[#1A1A32] dark:to-indigo-900/10 dark:border-white/5">
+                      <h4 className="font-bold text-slate-900 dark:text-white mb-1">AI Recommendation</h4>
+                      <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">
+                        You should focus on <span className="text-indigo-600 font-bold">{highPriority.topic}</span> next for maximum impact.
+                      </p>
+                      <Link href={`/student/chat?course_id=${highPriority.course_id || (courses.length > 0 ? courses[0].id : "")}`} className="text-sm font-bold text-indigo-600 flex items-center gap-1 hover:gap-2 transition-all">
+                        Open AI Chat <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </Card>
+                  );
+                })()
+              ) : (
+                <Card className="p-6 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30 dark:from-[#1A1A32] dark:to-indigo-900/10 dark:border-white/5">
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-1">AI Chat</h4>
+                  <p className="text-sm text-slate-500 dark:text-white/40 font-medium mb-4">Got questions about your materials? Ask your AI tutor anytime.</p>
+                  <Link href="/student/chat" className="text-sm font-bold text-indigo-600 flex items-center gap-1 hover:gap-2 transition-all">
+                    Open AI Chat <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </Card>
+              )}
             </div>
 
             <Card className="p-8 bg-slate-900 text-white relative overflow-hidden">

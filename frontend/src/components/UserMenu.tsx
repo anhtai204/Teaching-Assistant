@@ -103,14 +103,19 @@ export const UserMenu = () => {
         </div>
       </button>
 
-      {/* Dropdown */}
-      {isOpen && (
+      {/* Dropdown Menu - PORTALED */}
+      {isOpen && mounted && createPortal(
         <>
-          {mounted && createPortal(
-            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />,
-            document.body
-          )}
-          <div className="absolute right-0 mt-3 w-72 bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/10 rounded-2xl shadow-2xl z-[61] py-2 animate-in fade-in zoom-in-95 duration-200">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-[9998] bg-transparent" 
+            onClick={() => setIsOpen(false)} 
+          />
+          
+          {/* Menu Card */}
+          <div 
+            className="fixed top-[70px] right-6 w-72 bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/10 rounded-2xl shadow-2xl z-[9999] py-2 animate-in fade-in zoom-in-95 duration-200"
+          >
             <div className="px-4 py-4 border-b border-slate-50 dark:border-white/5 mb-2">
               <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] mb-2">Account Access</p>
               <div className="flex items-center gap-3">
@@ -160,7 +165,8 @@ export const UserMenu = () => {
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {/* Change Password Modal - PORTALED */}

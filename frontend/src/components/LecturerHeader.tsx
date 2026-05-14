@@ -17,7 +17,7 @@ export const LecturerHeader = () => {
   ];
 
   return (
-    <nav className="bg-white dark:bg-[#0F0F23]/80 backdrop-blur-md border-b border-slate-100 dark:border-white/5 sticky top-0 z-40 px-6 py-4">
+    <nav className="bg-white dark:bg-[#0F0F23]/80 backdrop-blur-md border-b border-slate-100 dark:border-white/5 sticky top-0 z-80 px-6 py-4">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-10">
           <Link href="/lecturer/dashboard" className="flex items-center gap-2 group">

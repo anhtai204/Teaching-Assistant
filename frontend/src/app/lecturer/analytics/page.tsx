@@ -84,9 +84,9 @@ function AnalyticsContent() {
             <p className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest mb-1">AI Resolution Rate</p>
             <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{stats?.resolution_rate || 0}%</p>
           </Card>
-          <Card className="p-6 border-none shadow-premium bg-brand-600 text-white">
-            <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Est. Lecturer Hours Saved</p>
-            <p className="text-3xl font-black">{stats?.hours_saved || 0}h</p>
+          <Card className="p-6 border-none shadow-premium bg-white dark:bg-[#1A1A3A] border-l-4 border-l-brand-500">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest mb-1">Est. Lecturer Hours Saved</p>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{stats?.hours_saved || 0}h</p>
           </Card>
         </div>
 
@@ -121,19 +121,19 @@ function AnalyticsContent() {
           </Card>
 
           {/* AI Insights Card */}
-          <Card className="p-8 border-none shadow-premium bg-slate-900 text-white space-y-6">
+          <Card className="p-8 border-none shadow-premium bg-white dark:bg-indigo-950 text-slate-900 dark:text-white space-y-6 border-l-4 border-l-amber-500">
             <h3 className="text-xl font-bold">Proactive AI Recommendation</h3>
-            <div className="space-y-4 text-slate-300">
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-2">
-                <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">Priority 1</p>
-                <p className="text-sm">Many students are struggling with <b>A* Algorithm</b>. Consider spending 15 minutes reviewing this in the next lecture.</p>
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 space-y-2">
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Priority 1</p>
+                <p className="text-sm text-slate-600 dark:text-slate-200">Many students are struggling with <b>A* Algorithm</b>. Consider spending 15 minutes reviewing this in the next lecture.</p>
               </div>
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-2">
-                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Insight</p>
-                <p className="text-sm">Your material "Chapter 3 - Search.pdf" is very well-indexed and covers 90% of questions about BFS/DFS.</p>
+              <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 space-y-2">
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Insight</p>
+                <p className="text-sm text-slate-600 dark:text-slate-200">Your material "Chapter 3 - Search.pdf" is very well-indexed and covers 90% of questions about BFS/DFS.</p>
               </div>
             </div>
-            <Button className="w-full bg-white text-slate-900 hover:bg-slate-100">Download Detailed Report</Button>
+            <Button className="w-full bg-brand-600 dark:bg-white text-white dark:!text-slate-900 hover:bg-brand-700 dark:hover:bg-slate-100 shadow-lg">Download Detailed Report</Button>
           </Card>
         </div>
       </main>

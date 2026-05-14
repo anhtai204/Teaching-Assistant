@@ -23,10 +23,10 @@ interface Material {
 export default function LecturerMaterialsPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen items-center justify-center bg-[#F8FAFC]">
+      <div className="flex h-screen items-center justify-center bg-[#F8FAFC] dark:bg-[#0F0F23]">
         <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Synchronizing Knowledge...</p>
+          <p className="text-slate-500 dark:text-white/40 font-bold uppercase tracking-widest text-[10px]">Synchronizing Knowledge...</p>
         </div>
       </div>
     }>
@@ -374,10 +374,10 @@ function MaterialsContent() {
             <UploadCloud className="h-12 w-12" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold text-slate-900">
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">
               {isUploading ? "Injecting Knowledge..." : "Drop files here or click to browse"}
             </p>
-            <p className="text-base text-slate-400 font-medium max-w-md mx-auto">
+            <p className="text-base text-slate-400 dark:text-white/40 font-medium max-w-md mx-auto">
               Smart ingestion supports PDF, Office, Markdown, and Audio/Video transcription.
             </p>
           </div>
@@ -511,7 +511,7 @@ function MaterialsContent() {
                           ) : null}
                           
                           <select 
-                            className="text-[10px] font-bold bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                            className="text-[10px] font-bold bg-slate-50 dark:bg-[#1A1A3A] text-slate-500 dark:text-white/40 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
                             onChange={(e) => {
                               if(e.target.value) {
                                 handleAssignCourse(m.id, e.target.value);

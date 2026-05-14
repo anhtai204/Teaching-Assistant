@@ -10,9 +10,9 @@ router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.get("/overview")
 async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
-    """
-    Returns high-level stats for the lecturer dashboard.
-    """
+    if course_id == "null" or not course_id:
+        return {"total_chats": 0, "total_questions": 0, "resolution_rate": 0, "hours_saved": 0}
+        
     total_chats = db.query(ChatSession).filter(ChatSession.course_id == course_id).count()
     
     # AI Resolution rate (messages that aren't flagged or unanswered)
@@ -48,9 +48,9 @@ async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
 
 @router.get("/knowledge-gaps")
 async def get_knowledge_gaps(course_id: str, db: Session = Depends(get_db)):
-    """
-    Returns aggregated topics that students are struggling with.
-    """
+    if course_id == "null" or not course_id:
+        return []
+        
     gaps = (
         db.query(KnowledgeGap)
         .filter(KnowledgeGap.course_id == course_id)
@@ -70,9 +70,9 @@ async def get_knowledge_gaps(course_id: str, db: Session = Depends(get_db)):
 
 @router.post("/analyze")
 async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
-    """
-    Triggers the LLM to analyze unresolved questions and negative feedback to extract knowledge gaps.
-    """
+    if course_id == "null" or not course_id:
+        raise HTTPException(status_code=400, detail="Invalid course ID")
+        
     from src.analytics.analytics_service import generate_knowledge_gaps_with_llm
     
     # 1. Fetch unresolved/negative feedback chats
@@ -132,9 +132,9 @@ async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
 
 @router.get("/roadmap")
 async def get_class_roadmap_progress(course_id: str, db: Session = Depends(get_db)):
-    """
-    Returns aggregated roadmap progress for all students in the class.
-    """
+    if course_id == "null" or not course_id:
+        return []
+        
     from src.models import RoadmapItem, course_enrollments, User
     
     # Get all students enrolled in the course
