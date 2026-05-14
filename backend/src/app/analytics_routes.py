@@ -9,17 +9,26 @@ import uuid
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.get("/overview")
-async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
-    if course_id == "null" or not course_id:
+async def get_analytics_overview(course_id: str = None, lecturer_id: str = None, db: Session = Depends(get_db)):
+    from src.models import Course
+    
+    target_course_ids = []
+    if course_id and course_id != "null":
+        target_course_ids = [course_id]
+    elif lecturer_id and lecturer_id != "null":
+        courses = db.query(Course).filter(Course.lecturer_id == lecturer_id).all()
+        target_course_ids = [str(c.id) for c in courses]
+
+    if not target_course_ids:
         return {"total_chats": 0, "total_questions": 0, "resolution_rate": 0, "hours_saved": 0}
         
-    total_chats = db.query(ChatSession).filter(ChatSession.course_id == course_id).count()
+    total_chats = db.query(ChatSession).filter(ChatSession.course_id.in_(target_course_ids)).count()
     
     # AI Resolution rate (messages that aren't flagged or unanswered)
     total_assistant_msgs = (
         db.query(ChatMessage)
         .join(ChatSession)
-        .filter(ChatSession.course_id == course_id)
+        .filter(ChatSession.course_id.in_(target_course_ids))
         .filter(ChatMessage.role == "assistant")
         .count()
     )
@@ -27,7 +36,7 @@ async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
     unresolved_msgs = (
         db.query(ChatMessage)
         .join(ChatSession)
-        .filter(ChatSession.course_id == course_id)
+        .filter(ChatSession.course_id.in_(target_course_ids))
         .filter(ChatMessage.is_flagged == True)
         .count()
     )
@@ -47,13 +56,22 @@ async def get_analytics_overview(course_id: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/knowledge-gaps")
-async def get_knowledge_gaps(course_id: str, db: Session = Depends(get_db)):
-    if course_id == "null" or not course_id:
+async def get_knowledge_gaps(course_id: str = None, lecturer_id: str = None, db: Session = Depends(get_db)):
+    from src.models import Course
+    
+    target_course_ids = []
+    if course_id and course_id != "null":
+        target_course_ids = [course_id]
+    elif lecturer_id and lecturer_id != "null":
+        courses = db.query(Course).filter(Course.lecturer_id == lecturer_id).all()
+        target_course_ids = [str(c.id) for c in courses]
+
+    if not target_course_ids:
         return []
         
     gaps = (
         db.query(KnowledgeGap)
-        .filter(KnowledgeGap.course_id == course_id)
+        .filter(KnowledgeGap.course_id.in_(target_course_ids))
         .order_by(KnowledgeGap.frequency.desc())
         .limit(10)
         .all()
