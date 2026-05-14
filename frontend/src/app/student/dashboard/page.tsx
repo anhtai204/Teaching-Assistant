@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 
 import { LayoutDashboard, BookOpen, Clock, LogOut, Plus, ArrowRight, Search, PlusCircle, X, GraduationCap, Sparkles } from "lucide-react";
 import { StudentHeader } from "@/components/StudentHeader";
+import { createPortal } from "react-dom";
+
 
 interface Course {
   id: string;
@@ -22,10 +24,22 @@ interface Course {
 export default function StudentDashboard() {
   const { data: session } = useSession();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enrollCode, setEnrollCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+
+  const filteredCourses = courses.filter(course => 
+    course.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    course.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     if (session?.user) {
@@ -117,6 +131,8 @@ export default function StudentDashboard() {
                 <input
                   type="text"
                   placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:border-blue-500 outline-none transition-all w-64"
                 />
               </div>
@@ -142,7 +158,7 @@ export default function StudentDashboard() {
                   </Card>
                 ))
               ) : (
-                courses.map((course) => (
+                filteredCourses.map((course) => (
                   <Link key={course.id} href={`/student/courses/${course.id}`} className="group">
                     <Card className="p-8 h-full flex flex-col justify-between border-slate-100 hover:border-blue-200 shadow-sm hover:shadow-xl hover:-translate-y-1 duration-300 relative overflow-hidden dark:bg-[#1A1A3A] dark:hover:bg-[#23234F]">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 dark:bg-blue-500/5 rounded-bl-[100px] -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500" />
@@ -233,10 +249,15 @@ export default function StudentDashboard() {
         </div>
       </main>
 
-      {/* Join Course Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <Card className="w-full max-w-md p-10 relative shadow-2xl animate-in zoom-in-95 duration-200">
+      {/* Join Course Modal - PORTALED */}
+      {mounted && isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-slate-900/60 animate-in fade-in duration-100" 
+            style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+            onClick={() => setIsModalOpen(false)} 
+          />
+          <Card className="w-full max-w-md p-10 relative shadow-2xl animate-in zoom-in-95 duration-200 z-[101] dark:bg-[#1A1A3A] dark:border-white/10">
             <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-6 right-6 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -269,8 +290,10 @@ export default function StudentDashboard() {
               </Button>
             </form>
           </Card>
-        </div>
+        </div>,
+        document.body
       )}
+
     </div>
   );
 }

@@ -1,3 +1,4 @@
+from src.models import RoadmapItem
 from fastapi import Query
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from uuid import UUID
@@ -924,10 +925,25 @@ async def update_course(course_id: str, request: CourseCreate, db: Session = Dep
     db.commit()
     return {'message': 'Course updated successfully'}
 @router.get("/api/roadmap")
-async def get_roadmap(user_id: str, db: Session = Depends(get_db)):
+async def get_roadmap(
+    user_id: str, 
+    course_id: Optional[str] = None, 
+    all: Optional[bool] = Query(False),
+    db: Session = Depends(get_db)
+):
     from src.models import RoadmapItem
-    # Kiểm tra xem sinh viên đã có lộ trình trong DB chưa
-    existing_items = db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id).order_by(RoadmapItem.created_at.desc()).all()
+    
+    # Filter by user and scope
+    query = db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id)
+    
+    if not all:
+        if course_id:
+            query = query.filter(RoadmapItem.course_id == course_id)
+        else:
+            # Get general items only if no course_id specified
+            query = query.filter(RoadmapItem.course_id == None)
+        
+    existing_items = query.order_by(RoadmapItem.created_at.desc()).all()
     
     if existing_items:
         return {
@@ -940,50 +956,68 @@ async def get_roadmap(user_id: str, db: Session = Depends(get_db)):
                     "priority": item.priority,
                     "progress": item.progress,
                     "status": item.status,
+                    "course_id": str(item.course_id) if item.course_id else None,
                     "sources": item.sources or [],
                     "actions": item.actions or []
                 } for item in existing_items
             ]
         }
     
-    # Nếu chưa có, tự động tạo mới (giống cơ chế Refresh)
-    return await refresh_roadmap(user_id, db)
+    # If no items found, just return empty (don't auto-generate)
+    return {
+        "ok": True,
+        "items": []
+    }
 
 @router.post("/api/roadmap/refresh")
-async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
-    from src.models import RoadmapItem
+async def refresh_roadmap(user_id: str, course_id: Optional[str] = None, db: Session = Depends(get_db)):
+    from src.models import RoadmapItem, ChatSession, ChatMessage, Course, Document, course_enrollments, course_document_links
     
-    # Xóa lộ trình cũ
-    db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id).delete()
+    # 1. Delete old roadmap items
+    delete_query = db.query(RoadmapItem).filter(RoadmapItem.student_id == user_id)
+    if course_id:
+        delete_query = delete_query.filter(RoadmapItem.course_id == course_id)
+    else:
+        # If general refresh, we might want to keep course-specific ones or delete all?
+        # Standard behavior: delete general ones (where course_id is null)
+        delete_query = delete_query.filter(RoadmapItem.course_id == None)
+        
+    delete_query.delete()
     db.commit()
 
-    # Thu thập dữ liệu cá nhân hóa thực sự
-    # 1. Lấy danh sách khóa học sinh viên đang tham gia
-    from src.models import Course, Document, course_enrollments, course_document_links
+    # 2. Collect context
+    # Get courses to consider
+    if course_id:
+        course_ids = [course_id]
+    else:
+        enrolled_courses = db.query(Course.id).join(course_enrollments).filter(course_enrollments.c.student_id == user_id).all()
+        course_ids = [c.id for c in enrolled_courses]
     
-    enrolled_courses = db.query(Course.id).join(course_enrollments).filter(course_enrollments.c.student_id == user_id).all()
-    course_ids = [c.id for c in enrolled_courses]
-    
-    # 2. Lấy tài liệu từ các khóa học đó
+    # Get documents from these courses
     if course_ids:
         docs = db.query(Document).join(course_document_links).filter(course_document_links.c.course_id.in_(course_ids)).all()
     else:
         docs = []
-    allowed_sources = list(set([d.name for d in docs])) # Loại bỏ trùng lặp nếu tài liệu thuộc nhiều khóa học
+    allowed_sources = list(set([d.name for d in docs]))
     
-    # 3. Lấy lịch sử chat (tối đa 50 tin nhắn gần nhất)
-    history = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == user_id).order_by(ChatMessage.created_at.desc()).limit(50).all()
-    # Đảo ngược lại để đúng thứ tự thời gian
+    # Get chat history (filter by course if specified)
+    history_query = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == user_id)
+    if course_id:
+        history_query = history_query.filter(ChatSession.course_id == course_id)
+    
+    history = history_query.order_by(ChatMessage.created_at.desc()).limit(50).all()
     history_dicts = [{"role": m.role, "content": m.content} for m in reversed(history)]
     
-    # Gọi AI để tạo lộ trình mới
+    # 3. Call AI
+    from src.roadmap.roadmap_service import generate_roadmap_with_llm
     items = generate_roadmap_with_llm(user_id, history_dicts, allowed_sources)
     
-    # Lưu vào Database
+    # 4. Save to DB
     saved_items = []
     for item in items:
         new_item = RoadmapItem(
             student_id=user_id,
+            course_id=course_id, # Can be None for general
             topic=item.get("topic", "Unknown"),
             description=item.get("description", ""),
             priority=item.get("priority", "medium"),
@@ -1007,6 +1041,7 @@ async def refresh_roadmap(user_id: str, db: Session = Depends(get_db)):
                 "priority": item.priority,
                 "progress": item.progress,
                 "status": item.status,
+                "course_id": str(item.course_id) if item.course_id else None,
                 "sources": item.sources,
                 "actions": item.actions
             } for item in saved_items
@@ -1038,6 +1073,12 @@ async def update_roadmap_progress(item_id: str, request: RoadmapProgressUpdate, 
         item.progress = new_progress
         if new_progress == 100:
             item.status = "done"
+            # Nếu hoàn thành 100%, tự động tích toàn bộ các task/actions
+            if item.actions:
+                updated_actions = []
+                for action in item.actions:
+                    updated_actions.append({**action, "done": True})
+                item.actions = updated_actions
         elif new_progress > 0:
             item.status = "in_progress"
         else:
@@ -1065,6 +1106,7 @@ async def get_student_revision_suggestions(user_id: str, db: Session = Depends(g
     # Map Gaps
     for gap in gaps:
         suggestions.append({
+            "course_id": str(gap.course_id),
             "topic": gap.topic,
             "reason": f"Bạn đã hỏi về chủ đề này {gap.frequency} lần trong các cuộc hội thoại gần đây.",
             "difficulty": "High" if gap.frequency > 3 else "Medium"
@@ -1076,6 +1118,7 @@ async def get_student_revision_suggestions(user_id: str, db: Session = Depends(g
         if any(s["topic"] == item.topic for s in suggestions):
             continue
         suggestions.append({
+            "course_id": str(item.course_id) if item.course_id else None,
             "topic": item.topic,
             "reason": "Chủ đề ưu tiên cao trong lộ trình học tập của bạn.",
             "difficulty": "Medium"
@@ -1092,3 +1135,190 @@ async def get_student_revision_suggestions(user_id: str, db: Session = Depends(g
         ]
         
     return {"suggestions": suggestions}
+# --- Assessment Quiz Endpoints ---
+
+class QuizGenerateRequest(BaseModel):
+    user_id: str
+    course_id: Optional[str] = None
+    course_ids: Optional[List[str]] = None
+    count: Optional[int] = 5
+    topics: Optional[List[str]] = None
+    title: Optional[str] = None
+
+class QuizEvaluateRequest(BaseModel):
+    user_id: str
+    attempt_id: str
+    answers: List[int]
+    skip_roadmap: Optional[bool] = False
+
+@router.post("/api/quiz/generate")
+async def generate_quiz(request: QuizGenerateRequest, db: Session = Depends(get_db)):
+    """
+    Generates a personalized assessment quiz, saves as pending attempt, and returns attempt_id.
+    """
+    from src.quiz.quiz_service import generate_assessment_quiz
+    from src.models import QuizAttempt
+    
+    ids = request.course_ids or ([request.course_id] if request.course_id else [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="At least one course_id or course_ids must be provided")
+        
+    questions = generate_assessment_quiz(ids, count=request.count, topics=request.topics)
+    if not questions:
+        raise HTTPException(status_code=500, detail="Failed to generate quiz questions")
+        
+    # Save as pending attempt immediately
+    new_attempt = QuizAttempt(
+        student_id=request.user_id,
+        course_ids=ids,
+        questions=questions,
+        answers=[], # Empty initially
+        total=len(questions),
+        status="pending",
+        title=request.title or ("Ôn tập tổng hợp" if len(ids) > 1 else "Củng cố kiến thức")
+    )
+    db.add(new_attempt)
+    db.commit()
+    
+    return {
+        "attempt_id": str(new_attempt.id),
+        "questions": questions
+    }
+
+@router.get("/api/quiz/history")
+async def get_quiz_history(user_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches the history of quiz attempts for a specific student.
+    """
+    from src.models import QuizAttempt
+    attempts = db.query(QuizAttempt).filter(QuizAttempt.student_id == user_id).order_by(QuizAttempt.created_at.desc()).all()
+    
+    return {
+        "attempts": [
+            {
+                "id": str(a.id),
+                "course_ids": a.course_ids,
+                "score": a.score,
+                "total": a.total,
+                "percentage": round((a.score / a.total) * 100, 1) if a.total > 0 and a.score is not None else 0,
+                "status": a.status,
+                "title": a.title,
+                "created_at": a.created_at.isoformat()
+            } for a in attempts
+        ]
+    }
+
+@router.get("/api/quiz/{attempt_id}")
+async def get_quiz_attempt(attempt_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches a specific quiz attempt by ID.
+    """
+    from src.models import QuizAttempt
+    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == attempt_id).first()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+        
+    return {
+        "id": str(attempt.id),
+        "questions": attempt.questions,
+        "answers": attempt.answers,
+        "status": attempt.status,
+        "score": attempt.score,
+        "total": attempt.total,
+        "course_ids": attempt.course_ids,
+        "created_at": attempt.created_at.isoformat()
+    }
+
+@router.post("/api/quiz/evaluate")
+async def evaluate_quiz(request: QuizEvaluateRequest, db: Session = Depends(get_db)):
+    """
+    Evaluates quiz results, updates the existing attempt, and generates a roadmap if needed.
+    """
+    from src.quiz.quiz_service import evaluate_assessment_results
+    from src.roadmap.roadmap_service import generate_roadmap_with_llm
+    from src.models import QuizAttempt
+    
+    # 1. Fetch the existing attempt
+    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == request.attempt_id).first()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Quiz attempt not found")
+        
+    # 2. Evaluate results
+    result = evaluate_assessment_results(attempt.questions, request.answers)
+    
+    # 3. Update the attempt
+    attempt.answers = request.answers
+    attempt.score = float(result["score"])
+    attempt.status = "completed"
+    db.commit()
+
+    # 4. Save/Return immediately if skip_roadmap is True
+    if request.skip_roadmap:
+        return {
+            "ok": True,
+            "result": result,
+            "attempt_id": str(attempt.id),
+            "message": "Củng cố kiến thức thành công. Kết quả đã được ghi nhận vào lịch sử."
+        }
+
+    # 5. Fetch history for context (for roadmap generation)
+    # Use the first course from the attempt context
+    c_id = attempt.course_ids[0] if attempt.course_ids else None
+    
+    history = db.query(ChatMessage).join(ChatSession).filter(ChatSession.student_id == request.user_id).limit(30).all()
+    chat_history = [{"role": m.role, "content": m.content} for m in history]
+    
+    # 5. Get course sources
+    course = db.query(Course).filter(Course.id == c_id).first() if c_id else None
+    allowed_sources = [doc.name for doc in course.documents] if course else []
+    
+    # 6. Generate TARGETED roadmap
+    new_items = generate_roadmap_with_llm(
+        request.user_id, 
+        chat_history, 
+        allowed_sources, 
+        assessment_gaps=result["gaps"]
+    )
+    
+    # 7. Persist to DB (Replace existing roadmap items for this user/course)
+    if c_id:
+        db.query(RoadmapItem).filter(
+            RoadmapItem.student_id == request.user_id,
+            RoadmapItem.course_id == c_id
+        ).delete()
+    
+    saved_items = []
+    for item in new_items:
+        new_item = RoadmapItem(
+            student_id=request.user_id,
+            course_id=c_id,
+            topic=item["topic"],
+            description=item["description"],
+            priority=item["priority"],
+            actions=item.get("actions", []),
+            sources=item.get("sources", []),
+            status="todo",
+            progress=0
+        )
+        db.add(new_item)
+        saved_items.append(new_item)
+    
+    db.commit()
+    
+    return {
+        "ok": True,
+        "result": result,
+        "attempt_id": str(attempt.id),
+        "items": [
+            {
+                "id": str(item.id),
+                "topic": item.topic,
+                "description": item.description,
+                "priority": item.priority,
+                "progress": item.progress,
+                "status": item.status,
+                "actions": item.actions,
+                "sources": item.sources
+            } for item in saved_items
+        ]
+    }

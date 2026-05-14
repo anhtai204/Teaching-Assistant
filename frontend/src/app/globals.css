@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Lexend:wght@300;400;500;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Lexend:wght@400;500;600;700;800;900&display=swap');
 @import "tw-animate-css";
 
 
@@ -16,6 +16,10 @@
   --color-muted: #64748B;
   --color-border: #E2E8F0;
 
+  /* Typography Refinement */
+  --font-main: 'Be Vietnam Pro', sans-serif;
+  --font-heading: 'Lexend', sans-serif;
+
   /* Spacing */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -32,9 +36,12 @@
   --shadow-xl: 0 20px 25px rgba(0,0,0,0.12);
 
   color-scheme: light;
-  font-family: 'Open Sans', sans-serif;
+  font-family: var(--font-main);
   background-color: var(--color-background);
   color: var(--color-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dark {
@@ -47,16 +54,21 @@
 
 body {
   transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-main);
+  letter-spacing: -0.011em;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-heading);
+  font-weight: 800;
   color: var(--color-text);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 html {
   scroll-behavior: smooth;
+  font-family: var(--font-main);
 }
 
 body {

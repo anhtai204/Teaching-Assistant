@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { StudentHeader } from "@/components/StudentHeader";
 import { BookOpen, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import QuizModal from "@/components/student/QuizModal";
 
 interface RevisionSuggestion {
+  course_id?: string;
   topic: string;
   reason: string;
   difficulty: "High" | "Medium" | "Low";
@@ -20,6 +22,11 @@ export default function StudentRevisionPage() {
   const [suggestions, setSuggestions] = useState<RevisionSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const fetchRevisionData = useCallback(async () => {
     if (!studentId) return;
@@ -38,11 +45,72 @@ export default function StudentRevisionPage() {
     }
   }, [studentId]);
 
+  const fetchQuizHistory = useCallback(async () => {
+    if (!studentId) return;
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/quiz/history?user_id=${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch history");
+      const data = await res.json();
+      setHistory(data.attempts);
+    } catch (err) {
+      console.error("History fetch error:", err);
+    }
+  }, [studentId]);
+
   useEffect(() => {
     if (studentId) {
       fetchRevisionData();
+      fetchQuizHistory();
     }
-  }, [studentId, fetchRevisionData]);
+  }, [studentId, fetchRevisionData, fetchQuizHistory]);
+
+  const startQuickQuiz = async () => {
+    const ids = Array.from(new Set(suggestions.map(s => s.course_id).filter(Boolean))) as string[];
+    if (ids.length === 0) {
+      toast.info("Hiện chưa có bài kiểm tra phù hợp cho các chủ đề này.");
+      return;
+    }
+
+    setIsGenerating(true);
+    toast.promise(
+      (async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(`${baseUrl}/api/quiz/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: studentId,
+            course_ids: ids,
+            count: 15,
+            topics: suggestions.map(s => s.topic)
+          })
+        });
+        if (!res.ok) throw new Error("Failed to generate quiz");
+        const data = await res.json();
+        await fetchQuizHistory();
+        return data;
+      })(),
+      {
+        loading: 'AI đang soạn đề ôn tập cho bạn...',
+        success: (data) => {
+          setIsGenerating(false);
+          setSelectedAttemptId(data.attempt_id);
+          setShowQuiz(true);
+          return "Đề thi đã sẵn sàng!";
+        },
+        error: (err) => {
+          setIsGenerating(false);
+          return "Không thể soạn đề lúc này. Vui lòng thử lại sau.";
+        }
+      }
+    );
+  };
+
+  const resumeAttempt = (id: string) => {
+    setSelectedAttemptId(id);
+    setShowQuiz(true);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0F0F23]">
@@ -101,17 +169,98 @@ export default function StudentRevisionPage() {
 
         <Card className="p-8 bg-gradient-to-br from-indigo-600 to-purple-700 dark:from-indigo-900/40 dark:to-purple-900/40 text-white flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative border-none shadow-2xl shadow-indigo-500/20">
           <div className="space-y-3 relative z-10 text-center md:text-left">
-            <h3 className="text-2xl font-bold dark:text-white">Sẵn sàng cho một bài kiểm tra nhanh?</h3>
+            <h3 className="text-2xl font-bold dark:text-white">Củng cố kiến thức ngay</h3>
             <p className="text-indigo-100 dark:text-white/60 max-w-md">
-              Làm bài kiểm tra 5 phút về những chủ đề này để đánh giá lại mức độ hiểu bài của bạn.
+              Làm bài kiểm tra 15 câu hỏi tập trung vào các nội dung ưu tiên của tất cả các môn học.
             </p>
           </div>
-          <Button size="lg" className="relative z-10 bg-white !text-indigo-600 hover:bg-indigo-50 font-bold px-8 h-14 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
-            Bắt đầu ôn luyện
+          <Button 
+            size="lg" 
+            onClick={startQuickQuiz}
+            disabled={isGenerating}
+            className="relative z-10 bg-white !text-indigo-600 hover:bg-indigo-50 font-bold px-8 h-14 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+          >
+            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Bắt đầu ôn luyện"}
           </Button>
           <div className="absolute top-0 right-0 h-64 w-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
           <div className="absolute bottom-0 left-0 h-32 w-32 bg-purple-400/20 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
         </Card>
+
+        {/* Quiz History Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Lịch sử ôn tập</h3>
+          </div>
+
+          <div className="grid gap-4">
+            {history.length === 0 ? (
+              <div className="p-10 rounded-3xl border border-dashed border-slate-200 dark:border-white/10 text-center text-slate-400">
+                Chưa có lịch sử làm bài.
+              </div>
+            ) : (
+              history.map((attempt) => (
+                <Card key={attempt.id} className="p-5 flex items-center justify-between gap-4 border-none shadow-sm dark:bg-[#1A1A3A] transition-hover hover:shadow-md">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${
+                      attempt.status === 'completed' 
+                        ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10" 
+                        : "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10"
+                    }`}>
+                      {attempt.status === 'completed' ? `${attempt.percentage}%` : "..."}
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 dark:text-white">
+                          {attempt.title || `Ôn luyện ${attempt.total} câu`}
+                        </h4>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                          attempt.status === 'completed' 
+                            ? "bg-emerald-100 text-emerald-600" 
+                            : "bg-amber-100 text-amber-600"
+                        }`}>
+                          {attempt.status === 'completed' ? "Hoàn thành" : "Đang chờ"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-white/40">
+                        {new Date(attempt.created_at).toLocaleString('vi-VN')}
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant={attempt.status === 'completed' ? "outline" : "primary"}
+                    size="sm"
+                    onClick={() => resumeAttempt(attempt.id)}
+                    className="rounded-xl font-bold"
+                  >
+                    {attempt.status === 'completed' ? "Xem lại" : "Làm bài ngay"}
+                  </Button>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+
+        {showQuiz && studentId && (
+          <QuizModal 
+            attemptId={selectedAttemptId || undefined}
+            courseName="Ôn tập tổng hợp"
+            userId={studentId}
+            skipRoadmap={true}
+            onClose={() => {
+              setShowQuiz(false);
+              fetchQuizHistory();
+            }}
+            onComplete={() => {
+              setShowQuiz(false);
+              toast.success("Đã hoàn tất bài ôn tập!");
+              fetchQuizHistory();
+              fetchRevisionData();
+            }}
+          />
+        )}
       </main>
     </div>
   );

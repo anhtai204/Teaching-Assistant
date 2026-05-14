@@ -168,3 +168,20 @@ class MaterialRequest(Base):
     student = relationship("User")
     course = relationship("Course")
 
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    course_ids = Column(JSONB, default=[]) # List of course UUID strings
+    questions = Column(JSONB, nullable=False) # Full question objects with explanations
+    answers = Column(JSONB, nullable=False) # List of selected indices
+    score = Column(Float, nullable=True) # Null until completed
+    total = Column(Integer, nullable=False)
+    status = Column(String, default="pending") # 'pending', 'completed'
+    title = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    student = relationship("User")
+

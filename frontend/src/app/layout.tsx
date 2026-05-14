@@ -8,12 +8,10 @@ export const metadata: Metadata = {
 };
 
 import AuthProvider from "@/components/providers/SessionProvider";
+import { QuizProvider } from "@/components/providers/QuizProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "sonner";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 
 export default function RootLayout({
@@ -22,12 +20,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)}>
+    <html lang="en">
       <body>
         <ThemeProvider>
           <AuthProvider>
-            {children}
-            <Toaster richColors position="top-right" />
+            <QuizProvider>
+              {children}
+              <Toaster richColors position="top-right" />
+            </QuizProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

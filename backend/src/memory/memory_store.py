@@ -4,9 +4,8 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from src.rag.embedding import get_embedding
+# Lazy load embedding in get_emb to avoid startup hang
 
-embedding_model = get_embedding()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Force local project directory for memory storage
@@ -17,10 +16,8 @@ SUMMARY_PATH = Path(MEMORY_DB_PATH) / "session_summaries.json"
 AI_LOG_DIR = PROJECT_ROOT.parent / ".ai-log"
 SESSION_LOG_PATH = AI_LOG_DIR / "session.jsonl"
 
-from src.rag.vectorstore import get_chroma_client
-client = get_chroma_client()
+# Lazy load Chroma client in functions
 
-memory_col = client.get_or_create_collection("user_memory")
 
 
 def _stable_memory_id(user_id: str, text: str) -> str:
@@ -29,10 +26,12 @@ def _stable_memory_id(user_id: str, text: str) -> str:
 
 
 def get_emb(text: str) -> List[float]:
-    if hasattr(embedding_model, "embed_query"):
-        return embedding_model.embed_query(text)
+    from src.rag.embedding import get_embedding
+    model = get_embedding()
+    if hasattr(model, "embed_query"):
+        return model.embed_query(text)
     else:
-        return embedding_model.encode(text).tolist()
+        return model.encode(text).tolist()
 
 def add_memory(
     user_id: str,
@@ -54,7 +53,11 @@ def add_memory(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    memory_col.upsert(
+    from src.rag.vectorstore import get_chroma_client
+    client = get_chroma_client()
+    col = client.get_or_create_collection("user_memory")
+    
+    col.upsert(
         ids=[_stable_memory_id(user_id, text)],
         documents=[text],
         embeddings=[embedding],
@@ -84,10 +87,15 @@ def query_memory(
     if session_id and session_id != "global":
         conditions.append({"session_id": session_id})
 
+    from src.rag.vectorstore import get_chroma_client
+    client = get_chroma_client()
+    col = client.get_or_create_collection("user_memory")
+
     # Nếu có nhiều hơn 1 điều kiện, dùng $and. Nếu chỉ có 1, dùng chính điều kiện đó.
     where_clause = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
-    res = memory_col.query(
+
+    res = col.query(
         query_embeddings=[q_emb],
         n_results=top_k,
         where=where_clause,
@@ -131,9 +139,14 @@ def query_memory_records(
     if session_id and session_id != "global":
         conditions.append({"session_id": session_id})
 
+    from src.rag.vectorstore import get_chroma_client
+    client = get_chroma_client()
+    col = client.get_or_create_collection("user_memory")
+
     where_clause = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
-    res = memory_col.query(
+
+    res = col.query(
         query_embeddings=[q_emb],
         n_results=top_k,
         where=where_clause,

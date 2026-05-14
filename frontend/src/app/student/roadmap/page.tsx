@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { StudentHeader } from "@/components/StudentHeader";
+import { useQuiz } from "@/components/providers/QuizProvider";
 import {
   Sparkles,
   RefreshCw,
@@ -18,6 +19,8 @@ import {
   TrendingUp,
   Zap,
   RotateCcw,
+  BrainCircuit,
+  History,
 } from "lucide-react";
 
 interface RoadmapItem {
@@ -75,19 +78,50 @@ const getProgressTheme = (progress: number) => {
 
 export default function StudentRoadmapPage() {
   const { data: session } = useSession();
+  const { startQuiz } = useQuiz();
   const [items, setItems] = useState<RoadmapItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
 
   const studentId = (session?.user as any)?.id;
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const fetchRoadmap = useCallback(async () => {
+  const handleStartQuiz = () => {
+    if (!selectedCourse || !studentId) return;
+    startQuiz({
+      courseId: selectedCourse,
+      courseName: enrolledCourses.find(c => c.id === selectedCourse)?.name || "Khóa học",
+      userId: studentId
+    });
+  };
+
+  const fetchEnrolledCourses = useCallback(async () => {
     if (!studentId) return;
     try {
-      const res = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}`);
+      const res = await fetch(`${baseUrl}/api/student/${studentId}/courses`);
+      if (res.ok) {
+        const data = await res.json();
+        setEnrolledCourses(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch courses:", err);
+    }
+  }, [studentId, baseUrl]);
+
+  useEffect(() => {
+    fetchEnrolledCourses();
+  }, [fetchEnrolledCourses]);
+
+  const fetchRoadmap = useCallback(async () => {
+    if (!studentId) return;
+    setLoading(true);
+    try {
+      const url = `${baseUrl}/api/roadmap?user_id=${studentId}${selectedCourse ? `&course_id=${selectedCourse}` : ""}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Không thể tải lộ trình học tập.");
       const data = await res.json();
       setItems(data.items || []);
@@ -96,7 +130,21 @@ export default function StudentRoadmapPage() {
     } finally {
       setLoading(false);
     }
-  }, [studentId, baseUrl]);
+  }, [studentId, baseUrl, selectedCourse]);
+
+  // Helper to truncate filenames inside [brackets]
+  const formatActionText = (text: string) => {
+    return text.replace(/\[([^\]]+)\]/g, (match, fileName) => {
+      if (fileName.length > 25) {
+        return `[${fileName.substring(0, 22)}...]`;
+      }
+      return match;
+    });
+  };
+
+  useEffect(() => {
+    fetchRoadmap();
+  }, [fetchRoadmap]);
 
   const handleRefresh = async () => {
     if (!studentId) return;
@@ -104,7 +152,7 @@ export default function StudentRoadmapPage() {
     setError(null);
     try {
       const res = await fetch(
-        `${baseUrl}/api/roadmap/refresh?user_id=${studentId}`,
+        `${baseUrl}/api/roadmap/refresh?user_id=${studentId}${selectedCourse ? `&course_id=${selectedCourse}` : ""}`,
         { method: "POST" }
       );
       if (!res.ok) throw new Error("Không thể tạo lại lộ trình.");
@@ -227,7 +275,7 @@ export default function StudentRoadmapPage() {
   const overallTheme = getProgressTheme(overallProgress);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0F0F23] text-slate-900 dark:text-[#E2E8F0] transition-colors duration-300 font-['Inter']">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F0F23] text-slate-900 dark:text-[#E2E8F0] transition-colors duration-300">
       <StudentHeader />
 
       <main className="max-w-5xl mx-auto px-6 py-12 space-y-10">
@@ -238,25 +286,125 @@ export default function StudentRoadmapPage() {
               <Sparkles className="w-3.5 h-3.5" />
               <span>AI Cá nhân hóa</span>
             </div>
-            <h1 className="text-4xl font-black font-['Lexend'] text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               Lộ trình học tập
             </h1>
             <p className="text-slate-500 dark:text-white/70 max-w-md font-medium">
               Được tạo dựa trên phân tích hành vi và lịch sử hỏi đáp của bạn với AI trợ giảng.
             </p>
           </div>
-
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-sm text-white shadow-lg shadow-indigo-500/20 group"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} />
-            {refreshing ? "Đang phân tích..." : "Tạo lại lộ trình"}
-          </button>
         </div>
 
-        {/* Overall Progress */}
+        {/* Unified Scope Selector & Generation Wizard */}
+        <div className="mb-12 animate-reveal">
+          <div className="bg-white dark:bg-[#1A1A3A] rounded-[2.5rem] p-10 border border-slate-100 dark:border-white/5 shadow-xl shadow-slate-200/50 dark:shadow-none">
+            
+            {/* Step 1: Select Scope */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 pb-10 border-b border-slate-100 dark:border-white/5">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-full text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest">
+                  <Target className="w-3.5 h-3.5" />
+                  Bước 1: Xác định phạm vi học tập
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white font-['Lexend'] tracking-tight">
+                  Bạn muốn tập trung vào đâu?
+                </h2>
+              </div>
+              
+              <div className="relative w-full md:w-80">
+                <select 
+                  value={selectedCourse || "all"} 
+                  onChange={(e) => setSelectedCourse(e.target.value === "all" ? null : e.target.value)}
+                  className="w-full appearance-none bg-slate-50 dark:bg-[#1A1A3A] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 pr-12 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white shadow-sm"
+                >
+                  <option value="all" className="dark:bg-[#1A1A3A] dark:text-white">🌐 Tất cả các môn học</option>
+                  {enrolledCourses.map(course => (
+                    <option key={course.id} value={course.id} className="dark:bg-[#1A1A3A] dark:text-white">
+                      📚 {course.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <ChevronRight className="w-5 h-5 rotate-90" />
+                </div>
+              </div>
+            </div>
+
+            {/* Step 2: Choose Method */}
+            <div className="pt-10 space-y-6">
+              <div className="space-y-1">
+                <div className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] font-['Lexend']">
+                  Bước 2: Chọn phương thức tạo lộ trình
+                </div>
+                <p className="text-sm text-slate-500 dark:text-white/40 font-medium">
+                  Hệ thống sẽ dựa trên {selectedCourse ? "tài liệu của môn học đã chọn" : "tất cả dữ liệu học tập của bạn"} để xử lý.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Path 1: Quick Refresh */}
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
+                  className="group p-8 rounded-[2rem] border-2 border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5 text-left transition-all hover:border-indigo-500 hover:bg-white dark:hover:bg-white/5 hover:shadow-xl disabled:opacity-50"
+                >
+                  <div className="flex items-start gap-5">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <History className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-black text-slate-900 dark:text-white font-['Lexend']">Cập nhật nhanh</h3>
+                      <p className="text-xs text-slate-500 dark:text-white/40 leading-relaxed font-medium">
+                        Dựa trên lịch sử thảo luận và hành vi gần đây của bạn.
+                      </p>
+                      <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest pt-2">
+                        {refreshing ? "Đang xử lý..." : "Xác nhận tạo nhanh"} <ChevronRight className="w-3 h-3" />
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Path 2: Active Assessment */}
+                <button
+                  onClick={() => {
+                    if (!selectedCourse) {
+                      toast.error("Vui lòng chọn một môn học cụ thể để thực hiện đánh giá năng lực.");
+                      return;
+                    }
+                    handleStartQuiz();
+                  }}
+                  disabled={!selectedCourse}
+                  className={`group p-8 rounded-[2rem] border-2 text-left transition-all hover:shadow-xl ${
+                    selectedCourse 
+                    ? "border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-500/5 hover:border-emerald-500 hover:bg-white dark:hover:bg-white/5" 
+                    : "border-slate-100 dark:border-white/5 bg-slate-50/30 opacity-50 cursor-not-allowed"
+                  }`}
+                >
+                  <div className="flex items-start gap-5">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${
+                      selectedCourse ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-slate-200 dark:bg-white/10 text-slate-400"
+                    }`}>
+                      <BrainCircuit className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-black text-slate-900 dark:text-white font-['Lexend']">Đánh giá chuyên sâu</h3>
+                      <p className="text-xs text-slate-500 dark:text-white/40 leading-relaxed font-medium">
+                        Làm Quiz để xác định lỗ hổng kiến thức và xây dựng lộ trình bù đắp (Yêu cầu chọn môn học).
+                      </p>
+                      <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest pt-2 ${
+                        selectedCourse ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+                      }`}>
+                        {selectedCourse ? "Bắt đầu làm Quiz" : "Hãy chọn một môn học"} <ChevronRight className="w-3 h-3" />
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
         {items.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-reveal" style={{ animationDelay: '0.1s' }}>
             <div className="md:col-span-2 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-6 flex items-center gap-6 shadow-sm group hover:border-indigo-500/30 transition-colors">
@@ -448,10 +596,10 @@ export default function StudentRoadmapPage() {
                                 }`}>
                                   {act.done && <CheckCircle2 className="w-3.5 h-3.5" />}
                                 </div>
-                                <span className={`text-sm font-bold leading-relaxed transition-all ${
+                                <span className={`text-sm font-bold leading-relaxed transition-all break-words ${
                                   act.done ? 'text-emerald-700/60 dark:text-emerald-400/40 line-through' : 'text-slate-600 dark:text-white/80'
                                 }`}>
-                                  {act.text}
+                                  {formatActionText(act.text)}
                                 </span>
                               </div>
                             ))}
@@ -467,7 +615,11 @@ export default function StudentRoadmapPage() {
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {item.sources.map((src, i) => (
-                              <span key={i} className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-white/5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-slate-100 dark:border-white/5 hover:scale-105 transition-transform cursor-default">
+                              <span 
+                                key={i} 
+                                title={src}
+                                className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-white/5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-slate-100 dark:border-white/5 hover:scale-105 transition-transform cursor-default max-w-[200px] truncate"
+                              >
                                 {src}
                               </span>
                             ))}

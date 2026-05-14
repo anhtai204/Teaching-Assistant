@@ -24,6 +24,7 @@ interface Message {
 
 interface RoadmapItem {
   id: string;
+  course_id?: string;
   topic: string;
   description: string;
   status: string;
@@ -56,14 +57,24 @@ function ChatContent() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [roadmapTab, setRoadmapTab] = useState<"course" | "global">("course");
+
   const fetchRoadmap = async () => {
     try {
       const studentId = (session?.user as any)?.id || "default";
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}`);
+      // Fetch ALL roadmap items (frontend handles filtering via Tabs)
+      const res = await fetch(`${baseUrl}/api/roadmap?user_id=${studentId}&all=true`);
       if (res.ok) {
         const data = await res.json();
-        setRoadmapItems(data.items || []);
+        const items = data.items || [];
+        setRoadmapItems(items);
+        
+        // Auto-switch to global if no course items found
+        const hasCourseItems = items.some((it: any) => it.course_id === courseId);
+        if (!hasCourseItems && roadmapTab === "course") {
+          setRoadmapTab("global");
+        }
       }
     } catch (error) {
       console.error("Failed to fetch roadmap:", error);
@@ -88,6 +99,79 @@ function ChatContent() {
       console.error("Failed to update progress:", error);
     }
   };
+
+  const renderRoadmapList = (items: RoadmapItem[], title: string, icon: React.ReactNode) => (
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.2em] flex items-center gap-2 font-['Lexend']">
+          {icon}
+          {title}
+        </h3>
+        {roadmapTab === "course" && (
+           <button 
+             onClick={async () => {
+               try {
+                 const studentId = (session?.user as any)?.id || "default";
+                 const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                 let url = `${baseUrl}/api/roadmap/refresh?user_id=${studentId}`;
+                 if (courseId) url += `&course_id=${courseId}`;
+                 const res = await fetch(url, { method: 'POST' });
+                 if (res.ok) {
+                   fetchRoadmap();
+                 }
+               } catch (e) {
+                 console.error("Refresh failed", e);
+               }
+             }}
+             className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors uppercase tracking-widest"
+           >
+             Cập nhật
+           </button>
+        )}
+      </div>
+      <div className="space-y-3">
+        {items.map((item, idx) => (
+          <div key={item.id || idx} className={`p-4 bg-white dark:bg-[#1A1A3A] rounded-2xl border ${item.status === 'done' ? 'border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10' : 'border-slate-50 dark:border-white/5'} shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]`}>
+            <div className="flex justify-between items-center mb-2">
+              <p className={`text-xs font-bold truncate max-w-[140px] ${item.status === 'done' ? 'text-green-700 dark:text-green-400 line-through opacity-70' : 'text-slate-700 dark:text-white'}`}>{item.topic}</p>
+              {item.status !== 'done' && (
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                  item.priority?.toLowerCase() === 'high' ? '!text-rose-600 !bg-rose-50 dark:!bg-rose-500/20 dark:!text-rose-400' :
+                  item.priority?.toLowerCase() === 'medium' ? '!text-amber-600 !bg-amber-50 dark:!bg-amber-500/20 dark:!text-amber-400' :
+                  '!text-blue-600 !bg-blue-50 dark:!bg-blue-500/20 dark:!text-blue-400'
+                }`}>{item.priority}</span>
+              )}
+            </div>
+            <div className="h-1 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
+              <div 
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  item.status === 'done' ? "bg-green-500" : item.priority?.toLowerCase() === "high" ? "bg-red-500" : item.priority?.toLowerCase() === "medium" ? "bg-amber-500" : "bg-blue-500"
+                }`}
+                style={{ width: `${item.progress}%` }}
+              />
+            </div>
+            <div className="flex justify-end">
+              {item.status !== 'done' ? (
+                <button 
+                  onClick={() => handleUpdateProgress(item.id, 100)}
+                  className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-slate-400 hover:text-green-600 transition-colors"
+                >
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Hoàn thành
+                </button>
+              ) : (
+                <span className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-green-600">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Đã xong
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const currentCourseRoadmap = roadmapItems.filter(item => item.course_id === courseId);
+  const generalRoadmap = roadmapItems.filter(item => !item.course_id);
 
   useEffect(() => {
     if (session?.user) {
@@ -393,7 +477,7 @@ function ChatContent() {
   );
 
   return (
-    <div className="flex h-screen bg-white dark:bg-[#0F0F23] relative overflow-hidden font-['Inter']">
+    <div className="flex h-screen bg-white dark:bg-[#0F0F23] relative overflow-hidden">
       {/* Sidebar */}
       <aside className="w-80 border-r border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#0F0F23] flex flex-col shrink-0">
         <div className="p-6 border-b border-slate-100 dark:border-white/5 bg-white dark:bg-[#1A1A3A]">
@@ -405,7 +489,7 @@ function ChatContent() {
             <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-lg font-black text-slate-900 dark:text-white truncate leading-tight font-['Lexend']" title={course?.name}>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white truncate leading-tight" title={course?.name}>
               {course?.name || "Đang tải..."}
             </h2>
           </div>
@@ -427,7 +511,7 @@ function ChatContent() {
           </Button>
 
           <div className="space-y-4">
-            <h3 className="px-3 text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] flex items-center gap-2 font-['Lexend']">
+            <h3 className="px-3 text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
               <History className="w-3 h-3" />
               Lịch sử thảo luận
             </h3>
@@ -452,71 +536,67 @@ function ChatContent() {
             </div>
           </div>
 
-          {/* New Roadmap Section */}
-          <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
-            <div className="flex items-center justify-between px-3">
-              <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.2em] flex items-center gap-2 font-['Lexend']">
-                <Sparkles className="w-3 h-3" />
-                Trọng tâm học tập
-              </h3>
-              <button 
-                onClick={async () => {
-                  try {
-                    const studentId = (session?.user as any)?.id || "default";
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                    const res = await fetch(`${baseUrl}/api/roadmap/refresh?user_id=${studentId}`, { method: 'POST' });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setRoadmapItems(data.items || []);
-                    }
-                  } catch (e) {
-                    console.error("Refresh failed", e);
-                  }
-                }}
-                className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors uppercase tracking-widest"
-              >
-                Cập nhật
-              </button>
+          {/* Roadmap Section with Tabs */}
+          <div className="space-y-6 pt-4 border-t border-slate-100 dark:border-white/5">
+            {/* Tab Header */}
+            <div className="px-1">
+              <div className="bg-slate-100/50 dark:bg-white/5 p-1 rounded-xl flex gap-1 relative overflow-hidden">
+                <button 
+                  onClick={() => setRoadmapTab("course")}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all relative z-10 ${roadmapTab === "course" ? "text-blue-600 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+                >
+                  Môn học này
+                </button>
+                <button 
+                  onClick={() => setRoadmapTab("global")}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all relative z-10 ${roadmapTab === "global" ? "text-blue-600 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+                >
+                  Lộ trình chung
+                </button>
+                {/* Sliding Highlight */}
+                <div 
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-blue-600 rounded-lg shadow-sm transition-all duration-300 ease-out ${roadmapTab === "global" ? "translate-x-full" : "translate-x-0"}`}
+                />
+              </div>
             </div>
-            <div className="space-y-3">
-              {roadmapItems.map((item, idx) => (
-                <div key={item.id || idx} className={`p-4 bg-white dark:bg-[#1A1A3A] rounded-2xl border ${item.status === 'done' ? 'border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10' : 'border-slate-50 dark:border-white/5'} shadow-sm transition-all`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className={`text-xs font-bold truncate max-w-[140px] ${item.status === 'done' ? 'text-green-700 dark:text-green-400 line-through opacity-70' : 'text-slate-700 dark:text-white'}`}>{item.topic}</p>
-                    {item.status !== 'done' && (
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
-                        item.priority?.toLowerCase() === 'high' ? '!text-rose-600 !bg-rose-50 dark:!bg-rose-500/20 dark:!text-rose-400' :
-                        item.priority?.toLowerCase() === 'medium' ? '!text-amber-600 !bg-amber-50 dark:!bg-amber-500/20 dark:!text-amber-400' :
-                        '!text-blue-600 !bg-blue-50 dark:!bg-blue-500/20 dark:!text-blue-400'
-                      }`}>{item.priority}</span>
-                    )}
+
+            {/* Tab Content */}
+            <div className="min-h-[200px]">
+              {roadmapTab === "course" ? (
+                currentCourseRoadmap.length > 0 ? (
+                  renderRoadmapList(currentCourseRoadmap, "Trọng tâm môn học", <Sparkles className="w-3 h-3" />)
+                ) : (
+                  <div className="py-10 px-4 text-center space-y-3 animate-in fade-in duration-500">
+                    <div className="h-12 w-12 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold italic leading-relaxed">
+                      Môn học này chưa có lộ trình riêng. Nhấn "Cập nhật" để AI phân tích.
+                    </p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="text-[9px] h-8 rounded-lg"
+                      onClick={async () => {
+                         const studentId = (session?.user as any)?.id || "default";
+                         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                         await fetch(`${baseUrl}/api/roadmap/refresh?user_id=${studentId}&course_id=${courseId}`, { method: 'POST' });
+                         fetchRoadmap();
+                      }}
+                    >
+                      Tạo lộ trình môn học
+                    </Button>
                   </div>
-                  <div className="h-1 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden mb-2">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${
-                        item.status === 'done' ? "bg-green-500" : item.priority?.toLowerCase() === "high" ? "bg-red-500" : item.priority?.toLowerCase() === "medium" ? "bg-amber-500" : "bg-blue-500"
-                      }`}
-                      style={{ width: `${item.progress}%` }}
-                    />
+                )
+              ) : (
+                generalRoadmap.length > 0 ? (
+                  renderRoadmapList(generalRoadmap, "Mục tiêu học tập chung", <BookOpen className="w-3 h-3" />)
+                ) : (
+                  <div className="py-10 px-4 text-center space-y-2 animate-in fade-in duration-500">
+                     <BookOpen className="w-8 h-8 text-slate-200 mx-auto" />
+                     <p className="text-[10px] text-slate-400 font-bold italic">Chưa có mục tiêu chung.</p>
                   </div>
-                  <div className="flex justify-end">
-                    {item.status !== 'done' ? (
-                      <button 
-                        onClick={() => handleUpdateProgress(item.id, 100)}
-                        className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-slate-400 hover:text-green-600 transition-colors"
-                      >
-                        <CheckCircle2 className="w-2.5 h-2.5" /> Hoàn thành
-                      </button>
-                    ) : (
-                      <span className="text-[9px] flex items-center gap-1 font-black uppercase tracking-widest text-green-600">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> Đã xong
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {roadmapItems.length === 0 && (
-                <p className="px-4 text-[10px] text-slate-400 font-bold italic">Bắt đầu trò chuyện để AI xây dựng lộ trình cá nhân cho bạn!</p>
+                )
               )}
             </div>
           </div>

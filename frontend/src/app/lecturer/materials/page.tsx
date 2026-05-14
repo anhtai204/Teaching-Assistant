@@ -82,7 +82,23 @@ function MaterialsContent() {
     // Legacy - replaced by fetchCourses logic
   };
 
+  const prevMaterialsRef = useRef<Material[]>([]);
+
   useEffect(() => {
+    // Detect items that just finished processing
+    materials.forEach(newMat => {
+      const oldMat = prevMaterialsRef.current.find(m => m.id === newMat.id);
+      if (oldMat && 
+         (oldMat.status.toLowerCase() === "processing" || oldMat.status.toLowerCase() === "pending") && 
+         newMat.status.toLowerCase() === "indexed") {
+        toast.success(`Nạp tri thức thành công: ${newMat.name}`, {
+          description: "Tài liệu đã sẵn sàng để AI phân tích và tạo bài kiểm tra.",
+          duration: 5000,
+        });
+      }
+    });
+    prevMaterialsRef.current = materials;
+
     const hasProcessing = materials.some(
       m => m.status.toLowerCase() === "processing" || m.status.toLowerCase() === "pending"
     );
@@ -152,14 +168,15 @@ function MaterialsContent() {
       });
 
       if (response.ok) {
+        toast.success(`Đã tải lên thành công: ${file.name}`);
         fetchMaterials(false);
       } else {
         const err = await response.json();
-        alert(err.detail || "Upload failed.");
+        toast.error(err.detail || "Tải lên thất bại.");
       }
     } catch (error) {
       console.error("Upload error:", error);
-      alert("Error connecting to backend.");
+      toast.error("Lỗi kết nối máy chủ khi tải lên.");
     } finally {
       setIsUploading(false);
     }
@@ -283,14 +300,14 @@ function MaterialsContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F0F23] font-['Open_Sans']">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F0F23]">
       <LecturerHeader />
 
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-          <div className="space-y-3">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight">
-              {courseId ? `${courseName} ` : "Global "}
+          <div className="space-y-3 max-w-4xl">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white leading-tight break-words">
+              {courseId ? courseName : "Global"}{" "}
               <span className="text-blue-600 dark:text-blue-400">Knowledge Base</span>
             </h2>
             <p className="text-lg text-slate-500 dark:text-white/60 font-medium max-w-2xl">
@@ -376,7 +393,7 @@ function MaterialsContent() {
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 dark:text-white/60 uppercase tracking-[0.2em]">Linked Workspace</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 dark:text-white/60 uppercase tracking-[0.2em]">Format</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 dark:text-white/60 uppercase tracking-[0.2em]">AI Readiness</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 dark:text-white/60 uppercase tracking-[0.2em] text-right">Operations</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 dark:text-white/60 uppercase tracking-[0.2em] text-right min-w-[200px]">Operations</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-white/5 bg-white dark:bg-[#1A1A3A]">
@@ -446,7 +463,7 @@ function MaterialsContent() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-8 py-7">
+                      <td className="px-8 py-7 max-w-[300px]">
                         <div className="flex flex-wrap gap-2 items-center">
                           {m.course_name && m.course_name !== "Unassigned" ? (
                             m.course_name.split(", ").map((name, idx) => {
