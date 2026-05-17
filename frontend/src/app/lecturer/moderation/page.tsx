@@ -51,6 +51,8 @@ function ModerationContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   useEffect(() => {
     fetchCourses();
@@ -112,6 +114,11 @@ function ModerationContent() {
           delete next[id];
           return next;
         });
+        setToastMessage("Đính chính của bạn đã được cập nhật thành công!");
+        setShowSuccessToast(true);
+        setTimeout(() => {
+          setShowSuccessToast(false);
+        }, 3000);
       }
     } catch (error) {
       console.error("Resolve error:", error);
@@ -242,6 +249,14 @@ function ModerationContent() {
           </div>
         )}
       </main>
+
+      {/* Floating success toast */}
+      {showSuccessToast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-4 rounded-2xl shadow-xl shadow-emerald-600/20 border border-emerald-500/10 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-5 h-5 text-white" />
+          <span className="font-bold text-xs">{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

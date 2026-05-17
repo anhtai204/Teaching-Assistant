@@ -54,6 +54,7 @@ function ChatContent() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [previewSource, setPreviewSource] = useState<any>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -191,6 +192,7 @@ function ChatContent() {
     if (courseId && session?.user) {
       fetchCourseDetails();
       fetchSessions();
+      fetchSuggestions();
     }
   }, [courseId, session]);
 
@@ -245,13 +247,43 @@ function ChatContent() {
     }
   };
 
+  const fetchSuggestions = async () => {
+    try {
+      if (!courseId) return;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${baseUrl}/api/chat/suggestions?course_id=${courseId}&limit=3`);
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(data.suggestions || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch suggestions:", error);
+    }
+  };
+
   const fetchSessionMessages = async (sessionId: string) => {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const res = await fetch(`${baseUrl}/api/chat/sessions/${sessionId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data);
+        
+        // Parse lecturer manual corrections from message content if present
+        const parsedMessages = data.map((msg: any) => {
+          if (msg.role === "assistant" && msg.content && msg.content.includes("👨‍🏫 **Đính chính từ Giảng viên:**")) {
+            const parts = msg.content.split(/\n\n---\n👨‍🏫 \*\*Đính chính từ Giảng viên:\*\*\n/);
+            if (parts.length > 1) {
+              return {
+                ...msg,
+                content: parts[0],
+                manual_answer: parts[1]
+              };
+            }
+          }
+          return msg;
+        });
+
+        setMessages(parsedMessages);
       }
     } catch (error) {
       console.error("Failed to fetch messages:", error);
@@ -261,8 +293,9 @@ function ChatContent() {
   // Thêm AbortController để hủy stream khi cần
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (textToSend?: string) => {
+    const currentInput = textToSend || input;
+    if (!currentInput.trim() || isLoading) return;
 
     // 1. Hủy request cũ nếu đang stream dở (tránh lỗi đè tin nhắn hoặc leak memory)
     if (abortControllerRef.current) {
@@ -270,12 +303,13 @@ function ChatContent() {
     }
     abortControllerRef.current = new AbortController();
 
-    const currentInput = input;
-    const userMsg: Message = { role: "user", content: currentInput };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
     setIsLoading(true);
+    if (!textToSend) setInput("");
+    
+    const userMsg: Message = { role: "user", content: currentInput };
+    const placeholderAssistantMsg: Message = { role: "assistant", content: "" };
+
+    setMessages(prev => [...prev, userMsg, placeholderAssistantMsg]);
 
     try {
       const studentId = (session?.user as any)?.id || "default";
@@ -295,7 +329,6 @@ function ChatContent() {
 
       // Khởi tạo tin nhắn chờ của AI
       let assistantMsg: Message = { role: "assistant", content: "" };
-      setMessages(prev => [...prev, assistantMsg]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -353,13 +386,53 @@ function ChatContent() {
       }
 
       console.error("Chat error:", error);
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Sorry, I'm having trouble connecting to the server."
-      }]);
+      setMessages(prev => {
+        const newMsgs = [...prev];
+        if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].role === "assistant") {
+          newMsgs[newMsgs.length - 1] = {
+            role: "assistant",
+            content: "Sorry, I'm having trouble connecting to the server."
+          };
+        } else {
+          newMsgs.push({
+            role: "assistant",
+            content: "Sorry, I'm having trouble connecting to the server."
+          });
+        }
+        return newMsgs;
+      });
     } finally {
       // 6. Đảm bảo UI thoát trạng thái loading dù code có chạy thành công hay bị lỗi/crash
       setIsLoading(false);
+    }
+  };
+
+  const handleSatisfaction = async (messageId: string, isSatisfied: boolean) => {
+    if (isSatisfied) {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        await fetch(`${baseUrl}/api/moderation/messages/${messageId}/satisfaction`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_satisfied: isSatisfied })
+        });
+
+        // Update local state to hide the block
+        setMessages(prev => prev.map(m => {
+          if (m.id !== messageId) return m;
+          return {
+            ...m,
+            is_flagged: false,
+            feedback_rating: undefined
+          };
+        }));
+      } catch (error) {
+        console.error("Satisfaction update error:", error);
+      }
+    } else {
+      // Logic for "Không, hỏi thêm" -> Scroll to input and optionally preset text
+      scrollToBottom();
+      setInput("Tôi vẫn chưa hiểu rõ, xin hãy giải thích thêm về: ");
     }
   };
 
@@ -651,14 +724,39 @@ function ChatContent() {
                       <>
                         {renderContent(msg.content || "", msg.role as "user" | "assistant")}
                         {msg.manual_answer && (
-                          <div className="mt-6 pt-4 border-t border-amber-200 dark:border-amber-700/30">
-                            <div className="flex items-center gap-2 mb-3 text-amber-700 dark:text-amber-400 font-black text-[10px] uppercase tracking-widest">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              <span>Hiệu chỉnh từ Giảng viên</span>
+                          <div className={`mt-6 pt-4 border-t ${(msg.is_flagged || msg.feedback_rating === -1) ? "border-amber-200 dark:border-amber-700/30" : "border-slate-100 dark:border-white/10"}`}>
+                            <div className={`flex items-center gap-2 mb-3 font-black text-[10px] uppercase tracking-widest ${(msg.is_flagged || msg.feedback_rating === -1) ? "text-amber-700 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                              {(msg.is_flagged || msg.feedback_rating === -1) ? (
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              <span>{(msg.is_flagged || msg.feedback_rating === -1) ? "Hiệu chỉnh từ Giảng viên" : "Đính chính đã xác thực từ Giảng viên"}</span>
                             </div>
                             <div className="text-slate-800 dark:text-slate-200">
                               {renderContent(msg.manual_answer, "assistant")}
                             </div>
+                            
+                            {/* Dynamic, clean, premium buttons integrated beautifully inside the orange box! */}
+                            {(msg.is_flagged || msg.feedback_rating === -1) && (
+                              <div className="mt-4 pt-3 border-t border-amber-200 dark:border-amber-700/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-amber-500/5 p-3.5 rounded-xl border border-amber-200/30">
+                                <p className="text-xs font-bold text-amber-800 dark:text-amber-300">Bạn có hài lòng với câu trả lời đính chính này không?</p>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button 
+                                    onClick={() => handleSatisfaction(msg.id!, true)}
+                                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white transition-all shadow-sm shadow-blue-200 dark:shadow-none cursor-pointer"
+                                  >
+                                    Có, rất hữu ích
+                                  </button>
+                                  <button 
+                                    onClick={() => handleSatisfaction(msg.id!, false)}
+                                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 active:scale-95 text-slate-700 dark:text-slate-200 transition-all shadow-sm cursor-pointer"
+                                  >
+                                    Không, hỏi thêm
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </>
@@ -695,6 +793,27 @@ function ChatContent() {
                 </div>
               </div>
             ))}
+            
+            {/* Beautiful, premium suggested questions inside empty chat state! */}
+            {messages.length <= 1 && !isLoading && suggestions.length > 0 && (
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSend(suggestion)}
+                    className="p-5 text-left bg-white dark:bg-[#1A1A3A] border border-slate-100 dark:border-white/5 rounded-3xl hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 flex flex-col justify-between h-36 group cursor-pointer"
+                  >
+                    <div className="bg-blue-50 dark:bg-blue-500/10 p-2.5 rounded-2xl w-fit group-hover:bg-blue-600 transition-colors">
+                      <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2">
+                      {suggestion}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -711,7 +830,7 @@ function ChatContent() {
               className="w-full rounded-2xl border-2 border-slate-100 dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 px-8 py-5 pr-20 text-slate-900 dark:text-white focus:border-blue-500 focus:bg-white dark:focus:bg-white/10 focus:outline-none focus:ring-8 focus:ring-blue-500/5 transition-all resize-none shadow-inner min-h-[68px] font-medium text-base placeholder:text-slate-400"
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={isLoading || !input.trim()}
               className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-200 transition-all disabled:opacity-50 cursor-pointer"
             >

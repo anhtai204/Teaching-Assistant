@@ -52,6 +52,44 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
+def format_cached_answer_with_citations(answer: str, sources: list, db: Session) -> str:
+    if not sources:
+        return answer
+        
+    import re
+    from src.models import Document
+    
+    citation_links = []
+    for src in sources:
+        # src format e.g. "KhoiNghiepCongNghe_QuanTriSanPhamTinhGon.pdf (Trang 2)"
+        # extract base name
+        match_name = re.match(r'^([^\(]+)', src)
+        base_name = match_name.group(1).strip() if match_name else src
+        
+        # Look up document by name
+        doc = db.query(Document).filter(Document.name.like(f"%{base_name}%")).first()
+        doc_id = str(doc.id) if doc else base_name
+        
+        # Parse page or timestamp
+        page_match = re.search(r'Trang\s*(\d+)', src, re.IGNORECASE)
+        time_match = re.search(r'Tại\s*(\d+)s', src, re.IGNORECASE)
+        
+        if page_match:
+            page = page_match.group(1)
+            link = f"[Nguồn: {src}](/student/materials/viewer/{doc_id}?visible=True#page={page})"
+        elif time_match:
+            t_sec = time_match.group(1)
+            link = f"[Nguồn: {src}](/student/materials/viewer/{doc_id}?visible=True&t={t_sec})"
+        else:
+            link = f"[Nguồn: {src}](/student/materials/viewer/{doc_id}?visible=True)"
+            
+        citation_links.append(link)
+        
+    if citation_links:
+        # Append to the end of the answer
+        answer = answer.strip() + "\n\n" + " ".join(citation_links)
+    return answer
+
 # --- Endpoints ---
 
 import bcrypt
@@ -485,6 +523,72 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             db.add(user_msg)
             db.commit()
 
+        # --- INSTANT RAG CACHE INTERCEPTION ---
+        try:
+            import uuid
+            # Only use cache if we have a valid course_id
+            is_valid_uuid = False
+            try:
+                uuid.UUID(str(request.course_id))
+                is_valid_uuid = True
+            except:
+                pass
+                
+            result = None
+            if is_valid_uuid:
+                from src.rag.embedding import get_embedding
+                from sqlalchemy import text
+                
+                embedding_model = get_embedding()
+                if hasattr(embedding_model, "embed_query"):
+                    q_emb = embedding_model.embed_query(request.message)
+                else:
+                    q_emb = embedding_model.encode(request.message).tolist()
+                    
+                # STRICTLY FILTER BY course_id to prevent cross-course leakage
+                # Use ::uuid cast to prevent Postgres operator errors
+                query = text("""
+                    SELECT answer, sources, question_embedding <=> CAST(:emb AS vector) AS distance
+                    FROM faq_cache
+                    WHERE course_id = CAST(:cid AS UUID)
+                    ORDER BY question_embedding <=> CAST(:emb AS vector) ASC
+                    LIMIT 1
+                """)
+                result = db.execute(query, {"emb": f"[{','.join(map(str, q_emb))}]", "cid": str(request.course_id)}).fetchone()
+            
+            if result and result[2] <= 0.10:
+                sources = result[1] or []
+                answer = format_cached_answer_with_citations(result[0], sources, db)
+                
+                # Save Assistant Message
+                if session:
+                    assistant_msg = ChatMessage(
+                        session_id=session.id,
+                        role="assistant",
+                        content=answer,
+                        sources=sources
+                    )
+                    db.add(assistant_msg)
+                    db.commit()
+
+                # Log to session.jsonl
+                append_conversation_turn(
+                    user_id=request.user_id,
+                    user_text=request.message,
+                    assistant_text=answer,
+                    session_id=str(session.id) if session else "default"
+                )
+
+                return {
+                    "response": answer,
+                    "session_id": str(session.id) if session else "default",
+                    "sources": sources
+                }
+        except Exception as e:
+            db.rollback()
+            print(f"[CACHE ERROR] {e}")
+        # --- END CACHE INTERCEPTION ---
+
         # 3. Run Agent with Profile
         response = run_agent(
             user_input=request.message,
@@ -560,6 +664,88 @@ async def chat_stream(
     session_id_str = str(session.id)
 
     async def stream_and_save():
+        # --- INSTANT RAG CACHE INTERCEPTION ---
+        try:
+            import uuid
+            # Only use cache if we have a valid course_id
+            is_valid_uuid = False
+            try:
+                uuid.UUID(str(course_id))
+                is_valid_uuid = True
+            except:
+                pass
+                
+            result = None
+            if is_valid_uuid:
+                from src.rag.embedding import get_embedding
+                from sqlalchemy import text
+                import json
+                import asyncio
+                
+                embedding_model = get_embedding()
+                if hasattr(embedding_model, "embed_query"):
+                    q_emb = embedding_model.embed_query(message)
+                else:
+                    q_emb = embedding_model.encode(message).tolist()
+                    
+                # STRICTLY FILTER BY course_id to prevent cross-course leakage
+                # Use ::uuid cast to prevent Postgres operator errors
+                query = text("""
+                    SELECT answer, sources, question_embedding <=> CAST(:emb AS vector) AS distance
+                    FROM faq_cache
+                    WHERE course_id = CAST(:cid AS UUID)
+                    ORDER BY question_embedding <=> CAST(:emb AS vector) ASC
+                    LIMIT 1
+                """)
+                result = db.execute(query, {"emb": f"[{','.join(map(str, q_emb))}]", "cid": str(course_id)}).fetchone()
+            
+            if result and result[2] <= 0.10:
+                sources = result[1] or []
+                answer = format_cached_answer_with_citations(result[0], sources, db)
+                
+                # Yield metadata immediately
+                metadata_str = json.dumps({
+                    "type": "metadata", 
+                    "sources": sources, 
+                    "chunks": []
+                }, default=str)
+                yield f"data: {metadata_str}\n\n"
+                
+                # Stream the words to simulate generation
+                words = answer.split(' ')
+                for word in words:
+                    chunk_str = json.dumps({"type": "token", "content": f"{word} "})
+                    yield f"data: {chunk_str}\n\n"
+                    await asyncio.sleep(0.01)
+                
+                # Save to db
+                assistant_msg = ChatMessage(
+                    session_id=session_id_str,
+                    role="assistant",
+                    content=answer,
+                    sources=sources
+                )
+                db.add(assistant_msg)
+                db.commit()
+                db.refresh(assistant_msg)
+                
+                # Log to conversation history file
+                from src.memory.memory_store import append_conversation_turn
+                append_conversation_turn(
+                    user_id=user_id,
+                    user_text=message,
+                    assistant_text=answer,
+                    session_id=session_id_str
+                )
+                
+                yield f"data: {{\"type\": \"message_id\", \"id\": \"{str(assistant_msg.id)}\"}}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+        except Exception as e:
+            db.rollback()
+            print(f"[CACHE ERROR] {e}")
+        # --- END CACHE INTERCEPTION ---
+
         full_content = ""
         metadata = {}
         
@@ -621,6 +807,36 @@ async def chat_stream(
         stream_and_save(),
         media_type="text/event-stream"
     )
+
+@router.get("/api/chat/suggestions")
+async def get_chat_suggestions(course_id: str, limit: int = 3, db: Session = Depends(get_db)):
+    try:
+        import uuid
+        is_valid = False
+        try:
+            uuid.UUID(str(course_id))
+            is_valid = True
+        except:
+            pass
+            
+        if not is_valid:
+            return {"suggestions": []}
+            
+        from sqlalchemy import text
+        query = text("""
+            SELECT question
+            FROM faq_cache
+            WHERE course_id = CAST(:cid AS UUID)
+            ORDER BY RANDOM()
+            LIMIT :lim
+        """)
+        results = db.execute(query, {"cid": str(course_id), "lim": limit}).fetchall()
+        
+        return {"suggestions": [row[0] for row in results]}
+    except Exception as e:
+        db.rollback()
+        print(f"[SUGGESTIONS ERROR] {e}")
+        return {"suggestions": []}
 
 @router.get("/api/chat/sessions")
 async def get_chat_sessions(student_id: UUID, course_id: Optional[UUID] = None, db: Session = Depends(get_db)):

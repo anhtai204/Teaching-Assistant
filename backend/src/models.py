@@ -185,3 +185,13 @@ class QuizAttempt(Base):
     # Relationships
     student = relationship("User")
 
+class FAQCache(Base):
+    __tablename__ = "faq_cache"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
+    question = Column(Text, nullable=False)
+    question_embedding = Column(Vector(768))
+    answer = Column(Text, nullable=False)
+    sources = Column(JSONB, default=[])
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
