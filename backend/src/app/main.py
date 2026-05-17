@@ -43,10 +43,11 @@ async def root():
         "version": "1.0.1"
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
-    return "ok"
+    return {"status": "ok"}
 
+    
 app.include_router(router)
 app.include_router(moderation_router)
 app.include_router(analytics_router)
