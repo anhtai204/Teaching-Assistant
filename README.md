@@ -6,6 +6,8 @@
 ![Tech Stack](https://img.shields.io/badge/stack-Next.js%20|%20FastAPI%20|%20OpenAI-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
+### 🎥 [XEM VIDEO DEMO SẢN PHẨM TẠI ĐÂY](https://drive.google.com/file/d/133pTdqs8G8k9WB6sZfM2wPK3KGh-aDBk/view?usp=sharing)
+
 ---
 
 ## 📖 Mô tả dự án
