@@ -195,3 +195,21 @@ class FAQCache(Base):
     answer = Column(Text, nullable=False)
     sources = Column(JSONB, default=[])
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class CourseQuestion(Base):
+    __tablename__ = "course_questions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
+    question = Column(Text, nullable=False)
+    options = Column(JSONB, default=[]) # e.g. ["A", "B", "C", "D"]
+    correct_index = Column(Integer, nullable=False) # 0-3
+    topic = Column(String, nullable=False)
+    explanation = Column(Text, nullable=True)
+    difficulty = Column(String, default="medium") # 'easy', 'medium', 'hard'
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    course = relationship("Course")
+    document = relationship("Document")

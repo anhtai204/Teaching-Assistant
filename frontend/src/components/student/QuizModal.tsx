@@ -47,6 +47,7 @@ export default function QuizModal({
   const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(initialAttemptId || null);
   const [mounted, setMounted] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
 
   const hasGenerated = useRef(false);
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -192,9 +193,7 @@ export default function QuizModal({
 
   const handleClose = () => {
     if (step === "quiz") {
-      if (confirm("Bạn có chắc chắn muốn thoát? Kết quả bài làm hiện tại sẽ không được lưu lại.")) {
-        onClose();
-      }
+      setShowConfirmClose(true);
     } else {
       onClose();
     }
@@ -227,6 +226,40 @@ export default function QuizModal({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-white dark:bg-[#1A1A3A] w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden relative animate-in zoom-in-95 duration-300">
         
+        {/* Close Confirmation Overlay */}
+        {showConfirmClose && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-[#1A1A3A] w-full max-w-sm rounded-[2.5rem] p-8 border border-indigo-500/20 shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-500 shadow-lg shadow-rose-500/10 animate-bounce">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white font-['Lexend'] tracking-tight">Rời khỏi bài làm?</h3>
+                <p className="text-sm text-slate-500 dark:text-white/60 leading-relaxed font-medium">
+                  Kết quả bài làm hiện tại của bạn sẽ bị mất và không được lưu lại. Bạn có chắc chắn muốn thoát?
+                </p>
+              </div>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowConfirmClose(false)}
+                  className="flex-1 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/60 hover:bg-slate-50 dark:hover:bg-white/5 font-black text-xs uppercase tracking-widest transition-all"
+                >
+                  Quay lại làm
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmClose(false);
+                    onClose();
+                  }}
+                  className="flex-1 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 active:scale-95"
+                >
+                  Xác nhận thoát
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header Actions */}
         <div className="absolute top-8 right-8 flex items-center gap-3 z-10">
           {(step === "loading" || step === "evaluating") && (
@@ -438,13 +471,19 @@ export default function QuizModal({
                 </div>
 
                 {questions[currentIdx].explanation && (
-                  <div className="p-6 bg-indigo-50 dark:bg-indigo-500/5 rounded-3xl border border-indigo-100 dark:border-indigo-500/20 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest">
-                        <BrainCircuit className="w-4 h-4" /> Giải thích
-                      </div>
+                  <div className="p-8 bg-gradient-to-r from-indigo-50/70 to-purple-50/70 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-[2rem] border-2 border-indigo-100/50 dark:border-indigo-500/10 border-l-8 border-l-indigo-600 dark:border-l-indigo-500 space-y-4 shadow-sm relative overflow-hidden group/exp">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover/exp:scale-110 transition-transform">
+                      <BrainCircuit className="w-16 h-16 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <p className="text-sm text-slate-700 dark:text-indigo-100/80 leading-relaxed font-medium">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
+                        <BrainCircuit className="w-4 h-4 animate-pulse" />
+                      </span>
+                      <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest font-['Lexend']">
+                        Giải thích khoa học của AI
+                      </span>
+                    </div>
+                    <p className="text-base md:text-[17px] text-slate-800 dark:text-indigo-50/90 leading-relaxed font-semibold">
                       {questions[currentIdx].explanation}
                     </p>
                   </div>

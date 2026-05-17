@@ -95,8 +95,35 @@ export default function StudentRoadmapPage() {
     startQuiz({
       courseId: selectedCourse,
       courseName: enrolledCourses.find(c => c.id === selectedCourse)?.name || "Khóa học",
-      userId: studentId
+      userId: studentId,
+      onComplete: (newItems) => {
+        setItems(newItems || []);
+        toast.success("🚀 Lộ trình học tập của bạn đã được cập nhật tự động!");
+      }
     });
+  };
+
+  const handleCreateInitialRoadmap = () => {
+    if (selectedCourse) {
+      handleStartQuiz();
+    } else {
+      if (enrolledCourses.length > 0) {
+        const firstCourse = enrolledCourses[0];
+        setSelectedCourse(firstCourse.id);
+        startQuiz({
+          courseId: firstCourse.id,
+          courseName: firstCourse.name || "Khóa học",
+          userId: studentId,
+          onComplete: (newItems) => {
+            setItems(newItems || []);
+            toast.success("🚀 Lộ trình học tập của bạn đã được cập nhật tự động!");
+          }
+        });
+        toast.info(`Đang mở bài Quiz đánh giá năng lực cho môn học: ${firstCourse.name}`);
+      } else {
+        toast.error("Vui lòng đăng ký tham gia ít nhất một môn học để tạo lộ trình.");
+      }
+    }
   };
 
   const fetchEnrolledCourses = useCallback(async () => {
@@ -490,12 +517,11 @@ export default function StudentRoadmapPage() {
             <div className="space-y-3">
               <p className="text-2xl font-black text-slate-900 dark:text-white font-['Lexend']">Sẵn sàng bứt phá?</p>
               <p className="text-slate-500 dark:text-white/40 max-w-sm font-medium mx-auto">
-                Hãy bắt đầu tương tác với trợ lý AI. Hệ thống sẽ tự động tổng hợp các lỗ hổng kiến thức để xây dựng lộ trình này.
+                Bắt đầu làm bài đánh giá năng lực nhanh (5 câu hỏi) để AI phát hiện lỗ hổng kiến thức và thiết lập lộ trình học tập tối ưu cho bạn!
               </p>
             </div>
             <button
-              onClick={handleRefresh}
-              disabled={refreshing}
+              onClick={handleCreateInitialRoadmap}
               className="px-10 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm transition-all shadow-xl shadow-indigo-500/20 active:scale-95"
             >
               Tạo lộ trình học tập <ChevronRight className="inline w-4 h-4 ml-2" />

@@ -1,5 +1,5 @@
 from src.models import RoadmapItem
-from fastapi import Query
+from fastapi import Query, BackgroundTasks
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from uuid import UUID
 from fastapi.responses import StreamingResponse
@@ -896,6 +896,7 @@ async def submit_feedback(message_id: UUID, request: FeedbackRequest, db: Sessio
 
 @router.post("/api/materials/upload")
 async def upload_material(
+    background_tasks: BackgroundTasks,
     course_id: Optional[str] = None,
     lecturer_id: Optional[str] = None,
     file: UploadFile = File(...),
@@ -1021,6 +1022,15 @@ async def upload_material(
             
         new_doc.status = "indexed"
         db.commit()
+        
+        # Schedule MCQ question pre-generation in background
+        if course_id:
+            try:
+                from src.quiz.quiz_service import pre_generate_document_questions
+                background_tasks.add_task(pre_generate_document_questions, course_id, str(new_doc.id), None)
+                print(f"[QUIZ_PREGEN] Scheduled background MCQ question generation for doc {new_doc.id}")
+            except Exception as bg_err:
+                print(f"[QUIZ_PREGEN_ERROR] Failed to schedule background task: {bg_err}")
         
         return {"message": "Success", "document_id": str(new_doc.id), "chunks": num_chunks}
     except Exception as e:
@@ -1379,7 +1389,7 @@ async def generate_quiz(request: QuizGenerateRequest, db: Session = Depends(get_
     if not ids:
         raise HTTPException(status_code=400, detail="At least one course_id or course_ids must be provided")
         
-    questions = generate_assessment_quiz(ids, count=request.count, topics=request.topics)
+    questions = generate_assessment_quiz(ids, student_id=request.user_id, count=request.count, topics=request.topics)
     if not questions:
         raise HTTPException(status_code=500, detail="Failed to generate quiz questions")
         
@@ -1466,6 +1476,45 @@ async def evaluate_quiz(request: QuizEvaluateRequest, db: Session = Depends(get_
     attempt.answers = request.answers
     attempt.score = float(result["score"])
     attempt.status = "completed"
+    
+    # --- NEW: Record student knowledge gaps detected from this quiz attempt ---
+    from src.models import KnowledgeGap
+    from uuid import UUID
+    from sqlalchemy import func
+    
+    c_id = attempt.course_ids[0] if attempt.course_ids else None
+    if c_id and result.get("gaps"):
+        for gap_topic in result["gaps"]:
+            try:
+                # Check if this student already has a gap recorded for this course and topic
+                existing_gap = db.query(KnowledgeGap).filter(
+                    KnowledgeGap.student_id == UUID(request.user_id),
+                    KnowledgeGap.course_id == UUID(str(c_id)),
+                    KnowledgeGap.topic == gap_topic
+                ).first()
+                
+                if existing_gap:
+                    existing_gap.frequency += 1
+                    existing_gap.last_detected_at = func.now()
+                    meta = dict(existing_gap.metadata_json or {})
+                    meta["last_attempt_score"] = float(result["score"])
+                    existing_gap.metadata_json = meta
+                else:
+                    new_gap = KnowledgeGap(
+                        student_id=UUID(request.user_id),
+                        course_id=UUID(str(c_id)),
+                        topic=gap_topic,
+                        frequency=1,
+                        metadata_json={
+                            "gap_source": "quiz_evaluation",
+                            "last_attempt_score": float(result["score"]),
+                            "attempt_id": str(attempt.id)
+                        }
+                    )
+                    db.add(new_gap)
+            except Exception as gap_err:
+                print(f"[QUIZ_GAP_RECORD_ERROR] Failed to save KnowledgeGap for student: {gap_err}")
+                
     db.commit()
 
     # 4. Save/Return immediately if skip_roadmap is True

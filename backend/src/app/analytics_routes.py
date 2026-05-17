@@ -136,10 +136,16 @@ async def analyze_class_insights(course_id: str, db: Session = Depends(get_db)):
         db.query(KnowledgeGap).filter(KnowledgeGap.course_id == course_id).delete()
         
         for gap_data in new_gaps:
+            gap_score = gap_data.get("gap_score", 5.0)
             new_gap = KnowledgeGap(
                 course_id=course_id,
                 topic=gap_data.get("topic", "Unknown"),
-                frequency=gap_data.get("frequency", 1)
+                frequency=gap_data.get("frequency", 1),
+                metadata_json={
+                    "gap_score": gap_score,
+                    "severity": "high" if gap_score >= 7.0 else ("medium" if gap_score >= 4.0 else "low"),
+                    "analysis_source": "llm_class_insights_v2"
+                }
             )
             db.add(new_gap)
             saved_count += 1

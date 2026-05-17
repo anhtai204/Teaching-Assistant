@@ -8,6 +8,7 @@ interface QuizTask {
   courseName: string;
   userId: string;
   skipRoadmap?: boolean;
+  onComplete?: (items: any[]) => void;
 }
 
 interface QuizContextType {
@@ -44,11 +45,10 @@ export function QuizProvider({ children }: { children: ReactNode }) {
           userId={activeTask.userId}
           skipRoadmap={activeTask.skipRoadmap}
           onClose={closeQuiz}
-          onComplete={() => {
-            // Success logic is handled inside QuizModal (toast/roadmap update)
-            // But we might want to refresh the roadmap page if the user is currently on it.
-            // For now, just letting QuizModal handle its own closing if needed,
-            // or we can close it here.
+          onComplete={(items) => {
+            if (activeTask.onComplete) {
+              activeTask.onComplete(items);
+            }
           }}
         />
       )}
