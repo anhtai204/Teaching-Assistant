@@ -1080,7 +1080,13 @@ async def link_material_to_course(
 ):
     from src.models import course_document_links, CourseQuestion
     from uuid import UUID
-    # Check if exists
+    
+    # 1. Check if the document has any existing course links BEFORE adding the new one
+    has_any_link = db.execute(course_document_links.select().where(
+        course_document_links.c.document_id == document_id
+    )).first()
+    
+    # 2. Check if this specific link already exists
     existing = db.execute(course_document_links.select().where(
         course_document_links.c.course_id == course_id,
         course_document_links.c.document_id == document_id
@@ -1090,18 +1096,19 @@ async def link_material_to_course(
         db.execute(course_document_links.insert().values(course_id=course_id, document_id=document_id))
         db.commit()
         
-        # Trigger MCQ generation in background if none exist yet for this doc/course
-        try:
-            q_exists = db.query(CourseQuestion).filter(
-                CourseQuestion.course_id == UUID(course_id),
-                CourseQuestion.document_id == UUID(document_id)
-            ).first()
-            if not q_exists:
-                from src.quiz.quiz_service import pre_generate_document_questions
-                background_tasks.add_task(pre_generate_document_questions, course_id, document_id, None)
-                print(f"[QUIZ_PREGEN] Scheduled background MCQ question generation for linked doc {document_id}")
-        except Exception as bg_err:
-            print(f"[QUIZ_PREGEN_ERROR] Failed to schedule background task: {bg_err}")
+        # 3. Only trigger MCQ generation if this document had NO courses linked to it previously
+        if not has_any_link:
+            try:
+                q_exists = db.query(CourseQuestion).filter(
+                    CourseQuestion.course_id == UUID(course_id),
+                    CourseQuestion.document_id == UUID(document_id)
+                ).first()
+                if not q_exists:
+                    from src.quiz.quiz_service import pre_generate_document_questions
+                    background_tasks.add_task(pre_generate_document_questions, course_id, document_id, None)
+                    print(f"[QUIZ_PREGEN] First course link! Scheduled background MCQ question generation for doc {document_id}")
+            except Exception as bg_err:
+                print(f"[QUIZ_PREGEN_ERROR] Failed to schedule background task: {bg_err}")
             
     return {"message": "Linked successfully"}
 
