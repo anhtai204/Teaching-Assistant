@@ -1072,8 +1072,14 @@ async def get_materials(course_id: Optional[str] = None, lecturer_id: Optional[s
 
 
 @router.post("/api/materials/{document_id}/link")
-async def link_material_to_course(document_id: str, course_id: str, db: Session = Depends(get_db)):
-    from src.models import course_document_links
+async def link_material_to_course(
+    background_tasks: BackgroundTasks,
+    document_id: str,
+    course_id: str,
+    db: Session = Depends(get_db)
+):
+    from src.models import course_document_links, CourseQuestion
+    from uuid import UUID
     # Check if exists
     existing = db.execute(course_document_links.select().where(
         course_document_links.c.course_id == course_id,
@@ -1083,6 +1089,20 @@ async def link_material_to_course(document_id: str, course_id: str, db: Session 
     if not existing:
         db.execute(course_document_links.insert().values(course_id=course_id, document_id=document_id))
         db.commit()
+        
+        # Trigger MCQ generation in background if none exist yet for this doc/course
+        try:
+            q_exists = db.query(CourseQuestion).filter(
+                CourseQuestion.course_id == UUID(course_id),
+                CourseQuestion.document_id == UUID(document_id)
+            ).first()
+            if not q_exists:
+                from src.quiz.quiz_service import pre_generate_document_questions
+                background_tasks.add_task(pre_generate_document_questions, course_id, document_id, None)
+                print(f"[QUIZ_PREGEN] Scheduled background MCQ question generation for linked doc {document_id}")
+        except Exception as bg_err:
+            print(f"[QUIZ_PREGEN_ERROR] Failed to schedule background task: {bg_err}")
+            
     return {"message": "Linked successfully"}
 
 @router.delete("/api/materials/{document_id}/link")
